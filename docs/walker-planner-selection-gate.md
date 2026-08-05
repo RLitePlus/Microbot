@@ -32,24 +32,30 @@ A production-core decision requires all of these gates:
    upstream planner failure or unexplained semantic divergence on a request selected for execution triggers
    rollback to the local planner. The normal-canary and forced-failure artifacts must jointly pass
    `scripts/evaluate-walker-rollout-evidence.py`; do not infer selection from packaging the adapter, enabling
-   shadow mode or reviewing two self-reported harness checks independently.
+   shadow mode or reviewing two self-reported harness checks independently. The paired artifact must also
+   contain complete canary-readiness timing: route submission through both searches, comparison,
+   selection/fallback and upstream materialization.
 6. **Evidence-scoped rollout:** accepted F2P evidence permits only an F2P-policy upstream-authoritative
    rollout. Selecting upstream for members policy requires a separate representative members-world slice
    covering members-only executors, requirements and transport networks.
 
-The current implementation satisfies gates 1, 2, 4, 5 and 6 at opt-in canary scope. Shadowing exists for synchronous, ordinary active and
+The current implementation satisfies gates 1, 2, 4, 5 and 6 at opt-in canary scope. Shadowing exists for
+synchronous, ordinary active and
 cave routes. Its coordinate-free coverage counters, read-only Agent Server endpoint and opt-in F2P harness
 capture produced an accepted 12-session aggregate covering recovery, transport, item-gated, bank-workflow,
 surface, underground, walking-only, live-collision, active-route/replan, arrival and executor-diversity
 minimums without a semantic divergence or planner failure. Five clean same-revision samples from an ephemeral
 detached commit containing the exact current tree pass gate 3's correctness and timing thresholds; the final
-review commit must reproduce or adopt that evidence under a durable revision identity. Production selection
+review commit must reproduce or adopt that evidence under a durable revision identity.
 The explicit `UPSTREAM_F2P_CANARY` selector now keeps members policy local, waits for both F2P candidates
 before atomically publishing an active route, selects upstream only on a semantic match and records distinct
 divergence/failure local fallbacks. A live underground object-transition run selected upstream 10/10 times
 and arrived 10/10 times. A separate test-only forced-failure run selected upstream 0/10 times, recorded ten
-failure fallbacks and still arrived 10/10 times. Production default/release selection remains pending because
-the performance evidence must be repeated or formally adopted under the final reachable review revision.
+failure fallbacks and still arrived 10/10 times. A fresh pair with aggregate canary-readiness telemetry passes:
+normal readiness averaged `268.3 ms`, peaked at `574.4 ms` and averaged `186.0 ms` of non-search overhead;
+forced rollback averaged `213.7 ms`, peaked at `332.7 ms` and averaged `134.1 ms` of non-search overhead.
+Production default/release selection remains pending because the durable final-revision performance evidence
+is not yet complete.
 
 ## Performance protocol
 
@@ -80,6 +86,21 @@ The checked-in evaluator requires:
 The relative case threshold prevents a material regression from hiding in a favorable suite total. The
 noise allowance avoids rejecting a sub-tick route because one engine takes a few additional milliseconds.
 Thresholds are command-line options, but changing them for a decision requires an accompanying rationale.
+
+The independent engine measurements do not capture the time an active dual-planner canary keeps the route in
+the calculating state. The live paired evaluator therefore additionally requires:
+
+- one `canaryPerformance` planning sample per completed comparison;
+- successful upstream-search timing for every normal-canary comparison and none for the injected pre-search
+  failure case;
+- a maximum submission-to-ready duration no greater than `2,000 ms`; and
+- average non-search overhead no greater than `250 ms` per decision after subtracting both measured searches.
+
+The duration includes pathfinding-executor queue time, both searches, semantic comparison, selection or
+fallback and upstream-route materialization. The readiness/local-search ratio remains diagnostic, while the
+explicit overhead allowance avoids a fixed-cost short route failing solely because its local search is fast.
+Change either threshold only through the evaluator arguments and record the release rationale with the
+evidence.
 
 Bank-aware cases are excluded from core timing because Microbot currently composes direct, to-bank and
 from-bank searches while upstream models bank state in one graph search. Their route semantics remain part
@@ -171,6 +192,11 @@ review and remains rejecting release evidence. The upstream result is temporaril
 legacy completed-pathfinder view for existing runtime consumers. Remove that compatibility shell with the
 local core when the fallback sunset is reached.
 
+The vendored delta is also bounded: six upstream files may be patched and one adapter-only source may be
+added. `scripts/check-shortest-path-vendored-core.py` rejects a larger surface. Raising the budget requires a
+dated ADR amendment and a contribution-or-external-adapter assessment, so upstream convergence cannot quietly
+turn into another growing local planner fork.
+
 The local core becomes eligible for deletion only after every supported rollout scope has completed at least
 two upstream-authoritative releases and at least 1,000 settled production dual-planner comparisons without an
 unresolved semantic divergence or planner failure. The release test must prove the independent rollback path,
@@ -232,6 +258,9 @@ underground F2P-17 route: the normal canary recorded 10/10 upstream selections a
 divergence/failure; the forced-failure run recorded 10/10 local failure fallbacks and arrivals with zero
 upstream selections. Both were repeated after terminal evidence became route-generation scoped and retained
 all 10 eligible arrivals; focused members-canary and local-mode regressions prove ineligible walks leave the
-execution totals unchanged. The paired release evaluator accepts those two fresh-client artifacts with no
-failure, shortfall or warning. `LOCAL` remains the default. Do not change the release default until the
-performance result is tied to the final reachable review revision and the final evidence bundle is approved.
+execution totals unchanged. The fresh paired release evaluator accepts the normal and forced-failure artifacts
+with complete submission-to-ready telemetry and no failure, shortfall or warning. The normal canary averaged
+`268.3 ms`, peaked at `574.4 ms` and averaged `186.0 ms` of non-search overhead; rollback averaged `213.7 ms`,
+peaked at `332.7 ms` and averaged `134.1 ms` of non-search overhead. `LOCAL` remains the default. Do not change
+the release default until the performance result is tied to the final reachable review revision and the final
+evidence bundle is approved.

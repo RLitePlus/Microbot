@@ -53,7 +53,9 @@ fallback sunset.
   longer the primary walker milestone.
 - The production package now contains the reviewed upstream core in an isolated source set. Its exact-identity,
   live-collision and walking-cost hooks remain a small declared adapter patch surface, enforced by an offline
-  tree digest and optional byte-for-byte comparison with the pinned checkout.
+  tree digest and optional byte-for-byte comparison with the pinned checkout. The reviewed budget is six
+  patched upstream files and one adapter-added file; growth requires an amendment to this ADR explaining why
+  the hook cannot remain outside the core or be contributed upstream.
 - Shadow mode is default-off and cannot select a route for execution. Synchronous queries, ordinary active
   walker routes and cave-route selection publish bounded comparison evidence while the local core remains
   authoritative.
@@ -84,3 +86,9 @@ fallback sunset.
   no divergence or failure. A separate test-only injected-failure run made zero upstream selections, recorded
   ten local failure fallbacks and still produced ten arrivals. This validates the selector and independent
   fallback mechanism; it does not by itself authorize changing the default or cutting a release.
+- Canary evidence also records the coordinate-free duration from route submission through both searches,
+  semantic comparison, selection/fallback and route materialization. The paired release evaluator requires
+  one timing sample per completed comparison, a maximum readiness time of 2,000 ms and an aggregate
+  non-search overhead average no greater than 250 ms per decision. This measures the user-visible dual-running
+  cost that the independent engine benchmark cannot prove without making a fixed-cost short route fail a
+  noisy ratio gate.

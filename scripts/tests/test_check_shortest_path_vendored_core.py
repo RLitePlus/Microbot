@@ -45,6 +45,11 @@ class VendoredCoreCheckTest(unittest.TestCase):
             **current,
             "patchedUpstreamFiles": ["shortestpath/Patched.java"],
             "adapterAddedFiles": ["shortestpath/Added.java"],
+            "patchSurfacePolicy": {
+                "maximumPatchedUpstreamFiles": 1,
+                "maximumAdapterAddedFiles": 1,
+                "growthRequiresAdrAmendment": True,
+            },
         }
 
     def tearDown(self):
@@ -82,6 +87,20 @@ class VendoredCoreCheckTest(unittest.TestCase):
         self.assertTrue(
             any("undeclared upstream source patch" in item for item in failures)
         )
+
+    def test_offline_check_rejects_patch_surface_growth_beyond_budget(self):
+        self.baseline["patchedUpstreamFiles"].append("shortestpath/Exact.java")
+
+        failures = MODULE.verify_offline(self.vendored, self.baseline)
+
+        self.assertTrue(any("exceeds reviewed budget" in item for item in failures))
+
+    def test_offline_check_requires_adr_amendment_policy(self):
+        self.baseline["patchSurfacePolicy"]["growthRequiresAdrAmendment"] = False
+
+        failures = MODULE.verify_offline(self.vendored, self.baseline)
+
+        self.assertTrue(any("growthRequiresAdrAmendment" in item for item in failures))
 
 
 if __name__ == "__main__":

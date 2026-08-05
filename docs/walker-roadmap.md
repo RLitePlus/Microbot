@@ -338,8 +338,11 @@ collision updates continue through the same evidence boundary:
    10 local failure fallbacks and 10 arrivals. Both runs were repeated after terminal evidence was bound to
    the generation-matched ready route; each retained all 10 eligible arrivals, while members-canary and local
    regression routes leave execution totals unchanged. `evaluate-walker-rollout-evidence.py` now treats the
-   normal and forced-failure artifacts as one release gate and accepts the fresh pair only when engine/session,
-   route, accounting, selection, fallback, arrival, coverage and failure-opacity invariants all hold. Five
+   normal and forced-failure artifacts as one release gate and accepts a fresh pair only when engine/session,
+   route, accounting, selection, fallback, arrival, coverage, failure-opacity and submission-to-ready timing
+   invariants all hold. A fresh readiness-aware pair is accepted without failures, shortfalls or warnings:
+   normal readiness averaged `268.3 ms` and peaked at `574.4 ms`; forced rollback averaged `213.7 ms` and
+   peaked at `332.7 ms`, with average non-search overhead below the `250 ms` limit in both phases. Five
    clean samples from an ephemeral detached revision
    containing the exact current tree also pass every correctness and performance threshold (`0.392`
    upstream/local comparable-suite median ratio). Repeat or formally adopt that report under the final

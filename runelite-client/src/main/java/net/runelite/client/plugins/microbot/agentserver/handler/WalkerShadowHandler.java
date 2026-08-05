@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.sun.net.httpserver.HttpExchange;
 import net.runelite.client.plugins.microbot.util.walker.Rs2PathApi;
 import net.runelite.client.plugins.microbot.util.walker.Rs2PlannerShadowComparison;
+import net.runelite.client.plugins.microbot.util.walker.Rs2PlannerCanaryPerformanceStats;
 import net.runelite.client.plugins.microbot.util.walker.Rs2PlannerShadowContext;
 import net.runelite.client.plugins.microbot.util.walker.Rs2PlannerShadowCoverageStats;
 import net.runelite.client.plugins.microbot.util.walker.Rs2PlannerShadowStats;
@@ -108,6 +109,17 @@ public final class WalkerShadowHandler extends AgentHandler
 		execution.put("recoveryUnreachable", executionStats.getRecoveryUnreachable());
 		execution.put("recoveryExited", executionStats.getRecoveryExited());
 		response.put("execution", execution);
+		Rs2PlannerCanaryPerformanceStats performanceStats = stats.getCanaryPerformance();
+		Map<String, Long> canaryPerformance = new LinkedHashMap<>();
+		canaryPerformance.put("planningSamples", performanceStats.getPlanningSamples());
+		canaryPerformance.put("planningNanosTotal", performanceStats.getPlanningNanosTotal());
+		canaryPerformance.put("planningNanosMax", performanceStats.getPlanningNanosMax());
+		canaryPerformance.put("localSearchNanosTotal", performanceStats.getLocalSearchNanosTotal());
+		canaryPerformance.put("localSearchNanosMax", performanceStats.getLocalSearchNanosMax());
+		canaryPerformance.put("upstreamSearchSamples", performanceStats.getUpstreamSearchSamples());
+		canaryPerformance.put("upstreamSearchNanosTotal", performanceStats.getUpstreamSearchNanosTotal());
+		canaryPerformance.put("upstreamSearchNanosMax", performanceStats.getUpstreamSearchNanosMax());
+		response.put("canaryPerformance", canaryPerformance);
 		response.put("latest", Rs2PathApi.getLastShadowComparison()
 			.<Object>map(WalkerShadowHandler::comparison).orElse(null));
 		response.put("latestRouteShapeDifference", Rs2PathApi.getLastRouteShapeDifference()

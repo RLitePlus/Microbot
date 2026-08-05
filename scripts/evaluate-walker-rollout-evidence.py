@@ -14,6 +14,8 @@ DEFAULT_BASELINE = Path(__file__).with_name("shortest-path-upstream-baseline.jso
 PLANNER_MODE = "UPSTREAM_F2P_CANARY"
 REQUIRED_COVERAGE = ("ACTIVE_ROUTE", "UNDERGROUND_COORDINATES")
 REQUIRED_EXECUTORS = ("OBJECT",)
+DEFAULT_MAXIMUM_CANARY_PLANNING_MS = 2_000.0
+DEFAULT_MAXIMUM_CANARY_NON_SEARCH_OVERHEAD_MS = 250.0
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -55,6 +57,8 @@ def phase_summary(
     expect_local_fallback: bool,
     minimum_comparisons: int,
     minimum_arrivals: int,
+    maximum_canary_planning_ms: float,
+    maximum_canary_non_search_overhead_ms: float,
     required_routes: set[str],
     failures: list[str],
     shortfalls: list[str],
@@ -195,6 +199,79 @@ def phase_summary(
             f"{prefix} observed {totals['routeShapeDifferences']} equal-cost route-shape difference(s)"
         )
 
+    performance_raw = snapshot.get("canaryPerformance")
+    if not isinstance(performance_raw, dict):
+        raise ValueError(f"{prefix}.shadowEvidence.canaryPerformance must be an object")
+    performance = {
+        field: non_negative_int(performance_raw, field, f"{prefix}.canaryPerformance")
+        for field in (
+            "planningSamples",
+            "planningNanosTotal",
+            "planningNanosMax",
+            "localSearchNanosTotal",
+            "localSearchNanosMax",
+            "upstreamSearchSamples",
+            "upstreamSearchNanosTotal",
+            "upstreamSearchNanosMax",
+        )
+    }
+    if performance["planningSamples"] != totals["completed"]:
+        failures.append(
+            f"{prefix}.canaryPerformance.planningSamples must equal completed comparisons"
+        )
+    if performance["planningNanosTotal"] < performance["planningNanosMax"]:
+        failures.append(f"{prefix} canary planning total is smaller than its maximum")
+    if performance["localSearchNanosTotal"] < performance["localSearchNanosMax"]:
+        failures.append(f"{prefix} local search total is smaller than its maximum")
+    if performance["upstreamSearchNanosTotal"] < performance["upstreamSearchNanosMax"]:
+        failures.append(f"{prefix} upstream search total is smaller than its maximum")
+    if performance["planningNanosTotal"] < (
+        performance["localSearchNanosTotal"] + performance["upstreamSearchNanosTotal"]
+    ):
+        failures.append(
+            f"{prefix} canary readiness time does not contain both measured planner searches"
+        )
+    if performance["planningSamples"] and performance["localSearchNanosTotal"] == 0:
+        failures.append(f"{prefix} has no measurable local planner time")
+    planning_average_ms = (
+        performance["planningNanosTotal"] / performance["planningSamples"] / 1_000_000.0
+        if performance["planningSamples"] else 0.0
+    )
+    planning_max_ms = performance["planningNanosMax"] / 1_000_000.0
+    planning_local_ratio = (
+        performance["planningNanosTotal"] / performance["localSearchNanosTotal"]
+        if performance["localSearchNanosTotal"] else 0.0
+    )
+    non_search_overhead_nanos = max(
+        0,
+        performance["planningNanosTotal"]
+        - performance["localSearchNanosTotal"]
+        - performance["upstreamSearchNanosTotal"],
+    )
+    non_search_overhead_average_ms = (
+        non_search_overhead_nanos / performance["planningSamples"] / 1_000_000.0
+        if performance["planningSamples"] else 0.0
+    )
+    performance.update(
+        {
+            "planningAverageMs": planning_average_ms,
+            "planningMaxMs": planning_max_ms,
+            "planningLocalRatio": planning_local_ratio,
+            "nonSearchOverheadAverageMs": non_search_overhead_average_ms,
+        }
+    )
+    if planning_max_ms > maximum_canary_planning_ms:
+        failures.append(
+            f"{prefix} canary planning maximum {planning_max_ms:.1f} ms exceeds "
+            f"{maximum_canary_planning_ms:.1f} ms"
+        )
+    if non_search_overhead_average_ms > maximum_canary_non_search_overhead_ms:
+        failures.append(
+            f"{prefix} average canary non-search overhead "
+            f"{non_search_overhead_average_ms:.1f} ms exceeds "
+            f"{maximum_canary_non_search_overhead_ms:.1f} ms"
+        )
+
     if expect_local_fallback:
         expected_zero = ("matches", "divergences", "upstreamCanarySelections", "localFallbackDivergences")
         for field in expected_zero:
@@ -204,6 +281,11 @@ def phase_summary(
             failures.append(f"{prefix} must fail every upstream comparison")
         if totals["localFallbackFailures"] != totals["completed"]:
             failures.append(f"{prefix} must locally fall back for every planner failure")
+        if performance["upstreamSearchSamples"] != 0:
+            failures.append(
+                f"{prefix}.canaryPerformance.upstreamSearchSamples must be zero "
+                "for the injected pre-search failure"
+            )
         latest_failure = snapshot.get("latestFailure")
         if not isinstance(latest_failure, dict):
             failures.append(f"{prefix}.latestFailure must preserve the forced failure")
@@ -230,6 +312,11 @@ def phase_summary(
             failures.append(f"{prefix} must semantically match every comparison")
         if totals["upstreamCanarySelections"] != totals["completed"]:
             failures.append(f"{prefix} must select upstream for every matching comparison")
+        if performance["upstreamSearchSamples"] != totals["completed"]:
+            failures.append(
+                f"{prefix}.canaryPerformance.upstreamSearchSamples must equal "
+                "completed comparisons"
+            )
 
     execution_raw = snapshot.get("execution")
     if not isinstance(execution_raw, dict):
@@ -295,6 +382,7 @@ def phase_summary(
         "routes": route_summaries,
         "totals": totals,
         "execution": execution,
+        "canaryPerformance": performance,
         "coverage": coverage_summary,
         "transportExecutors": executor_summary,
     }
@@ -307,12 +395,19 @@ def evaluate(
     *,
     minimum_comparisons: int = 10,
     minimum_arrivals: int = 10,
+    maximum_canary_planning_ms: float = DEFAULT_MAXIMUM_CANARY_PLANNING_MS,
+    maximum_canary_non_search_overhead_ms: float = (
+        DEFAULT_MAXIMUM_CANARY_NON_SEARCH_OVERHEAD_MS
+    ),
     required_routes: set[str] | None = None,
 ) -> dict[str, Any]:
     if len(reviewed_commit) != 40:
         raise ValueError("reviewed_commit must be a full 40-character revision")
     if minimum_comparisons <= 0 or minimum_arrivals <= 0:
         raise ValueError("minimum comparison and arrival requirements must be positive")
+    if (maximum_canary_planning_ms <= 0
+            or maximum_canary_non_search_overhead_ms <= 0):
+        raise ValueError("canary performance thresholds must be positive")
     routes = {"F2P-17"} if required_routes is None else set(required_routes)
     if not routes:
         raise ValueError("at least one required route is needed")
@@ -327,6 +422,8 @@ def evaluate(
         expect_local_fallback=False,
         minimum_comparisons=minimum_comparisons,
         minimum_arrivals=minimum_arrivals,
+        maximum_canary_planning_ms=maximum_canary_planning_ms,
+        maximum_canary_non_search_overhead_ms=maximum_canary_non_search_overhead_ms,
         required_routes=routes,
         failures=failures,
         shortfalls=shortfalls,
@@ -339,6 +436,8 @@ def evaluate(
         expect_local_fallback=True,
         minimum_comparisons=minimum_comparisons,
         minimum_arrivals=minimum_arrivals,
+        maximum_canary_planning_ms=maximum_canary_planning_ms,
+        maximum_canary_non_search_overhead_ms=maximum_canary_non_search_overhead_ms,
         required_routes=routes,
         failures=failures,
         shortfalls=shortfalls,
@@ -360,6 +459,8 @@ def evaluate(
         "requiredRoutes": sorted(routes),
         "minimumComparisonsPerPhase": minimum_comparisons,
         "minimumArrivalsPerPhase": minimum_arrivals,
+        "maximumCanaryPlanningMillis": maximum_canary_planning_ms,
+        "maximumCanaryNonSearchOverheadMillis": maximum_canary_non_search_overhead_ms,
         "normal": normal_summary,
         "rollback": rollback_summary,
         "failures": failures,
@@ -379,17 +480,22 @@ def markdown(report: dict[str, Any]) -> str:
         f"Required routes: {', '.join(report['requiredRoutes'])}.",
         "",
         "| Phase | Completed | Matches | Planner failures | Upstream selections | "
-        "Local failure fallbacks | Arrivals | Status |",
-        "|---|---:|---:|---:|---:|---:|---:|---|",
+        "Local failure fallbacks | Arrivals | Ready avg ms | Ready max ms | "
+        "Non-search avg ms | Ready/local | Status |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|",
     ]
     for key, label in (("normal", "Normal canary"), ("rollback", "Forced rollback")):
         phase = report[key]
         totals = phase["totals"]
         execution = phase["execution"]
+        performance = phase["canaryPerformance"]
         lines.append(
             f"| {label} | {totals['completed']} | {totals['matches']} | "
             f"{totals['failures']} | {totals['upstreamCanarySelections']} | "
-            f"{totals['localFallbackFailures']} | {execution['arrived']} | {phase['status']} |"
+            f"{totals['localFallbackFailures']} | {execution['arrived']} | "
+            f"{performance['planningAverageMs']:.1f} | {performance['planningMaxMs']:.1f} | "
+            f"{performance['nonSearchOverheadAverageMs']:.1f} | "
+            f"{performance['planningLocalRatio']:.3f} | {phase['status']} |"
         )
     for heading, key in (
         ("Evidence shortfalls", "evidenceShortfalls"),
@@ -409,6 +515,16 @@ def main() -> int:
     parser.add_argument("--baseline", type=Path, default=DEFAULT_BASELINE)
     parser.add_argument("--minimum-comparisons", type=int, default=10)
     parser.add_argument("--minimum-arrivals", type=int, default=10)
+    parser.add_argument(
+        "--maximum-canary-planning-ms",
+        type=float,
+        default=DEFAULT_MAXIMUM_CANARY_PLANNING_MS,
+    )
+    parser.add_argument(
+        "--maximum-canary-non-search-overhead-ms",
+        type=float,
+        default=DEFAULT_MAXIMUM_CANARY_NON_SEARCH_OVERHEAD_MS,
+    )
     parser.add_argument("--required-route", action="append", default=[])
     parser.add_argument("--json-output", type=Path)
     parser.add_argument("--markdown-output", type=Path)
@@ -424,6 +540,10 @@ def main() -> int:
             reviewed_commit,
             minimum_comparisons=args.minimum_comparisons,
             minimum_arrivals=args.minimum_arrivals,
+            maximum_canary_planning_ms=args.maximum_canary_planning_ms,
+            maximum_canary_non_search_overhead_ms=(
+                args.maximum_canary_non_search_overhead_ms
+            ),
             required_routes=set(args.required_route) if args.required_route else None,
         )
     except (OSError, ValueError, json.JSONDecodeError) as error:

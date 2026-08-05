@@ -869,6 +869,16 @@ public class Rs2PathApiPlanningTest
 			assertEquals(before.getLocalFallbackDivergences(),
 				after.getLocalFallbackDivergences());
 			assertEquals(before.getLocalFallbackFailures(), after.getLocalFallbackFailures());
+			assertEquals(before.getCanaryPerformance().getPlanningSamples() + 1,
+				after.getCanaryPerformance().getPlanningSamples());
+			assertEquals(before.getCanaryPerformance().getUpstreamSearchSamples() + 1,
+				after.getCanaryPerformance().getUpstreamSearchSamples());
+			assertTrue(after.getCanaryPerformance().getPlanningNanosTotal()
+				> before.getCanaryPerformance().getPlanningNanosTotal());
+			assertTrue(after.getCanaryPerformance().getLocalSearchNanosTotal()
+				> before.getCanaryPerformance().getLocalSearchNanosTotal());
+			assertTrue(after.getCanaryPerformance().getUpstreamSearchNanosTotal()
+				> before.getCanaryPerformance().getUpstreamSearchNanosTotal());
 		}
 		finally
 		{
@@ -922,6 +932,10 @@ public class Rs2PathApiPlanningTest
 				after.getLocalFallbackFailures());
 			assertEquals(before.getUpstreamCanarySelections(),
 				after.getUpstreamCanarySelections());
+			assertEquals(before.getCanaryPerformance().getPlanningSamples() + 1,
+				after.getCanaryPerformance().getPlanningSamples());
+			assertEquals(before.getCanaryPerformance().getUpstreamSearchSamples(),
+				after.getCanaryPerformance().getUpstreamSearchSamples());
 		}
 		finally
 		{
@@ -931,6 +945,47 @@ public class Rs2PathApiPlanningTest
 			Rs2PathApi.setPathfindingExecutor(originalExecutor);
 			ShortestPathPlugin.pathfinderConfig = originalConfig;
 			restoreProperty("microbot.test.mode", originalTestMode);
+			restoreProperty("microbot.test.walker.forceUpstreamPlannerFailure", originalFailure);
+		}
+	}
+
+	@Test
+	public void activeF2pCaveCanaryCountsBothLocalCandidateSearches() throws Exception
+	{
+		PathfinderConfig activeConfig = f2pConfig();
+		setPlannerMode(activeConfig, PlannerSelectionMode.UPSTREAM_F2P_CANARY);
+		String originalFailure = System.getProperty(
+			"microbot.test.walker.forceUpstreamPlannerFailure");
+		System.clearProperty("microbot.test.walker.forceUpstreamPlannerFailure");
+		PathfinderConfig originalConfig = ShortestPathPlugin.pathfinderConfig;
+		Pathfinder originalPathfinder = Rs2PathApi.getPathfinder();
+		Future<?> originalFuture = Rs2PathApi.getPathfinderFuture();
+		Rs2PlannerShadowStats before = Rs2PathApi.getShadowStats();
+		try
+		{
+			ShortestPathPlugin.pathfinderConfig = activeConfig;
+			assertTrue(Rs2PathApi.restartActiveRoute(
+				Rs2RouteRequest.to(
+					new WorldPoint(3222, 3218, 0), new WorldPoint(3232, 3218, 0))
+					.withRefreshPolicy(Rs2RouteRequest.RefreshPolicy.NEVER),
+				true,
+				0));
+
+			Rs2PlannerShadowStats after = Rs2PathApi.getShadowStats();
+			Rs2PlannerShadowComparison comparison = Rs2PathApi.getLastShadowComparison()
+				.orElseThrow(AssertionError::new);
+			long localPlanningDelta = after.getCanaryPerformance().getLocalSearchNanosTotal()
+				- before.getCanaryPerformance().getLocalSearchNanosTotal();
+			assertEquals(before.getCanaryPerformance().getPlanningSamples() + 1,
+				after.getCanaryPerformance().getPlanningSamples());
+			assertTrue("cave timing must include the unselected local candidate search",
+				localPlanningDelta > comparison.getLocalSearchNanos());
+		}
+		finally
+		{
+			Rs2PathApi.setPathfinder(originalPathfinder);
+			Rs2PathApi.setPathfinderFuture(originalFuture);
+			ShortestPathPlugin.pathfinderConfig = originalConfig;
 			restoreProperty("microbot.test.walker.forceUpstreamPlannerFailure", originalFailure);
 		}
 	}
@@ -964,6 +1019,8 @@ public class Rs2PathApiPlanningTest
 
 			Rs2PlannerShadowStats afterRoute = Rs2PathApi.getShadowStats();
 			assertEquals(before.getSubmitted(), afterRoute.getSubmitted());
+			assertEquals(before.getCanaryPerformance().getPlanningSamples(),
+				afterRoute.getCanaryPerformance().getPlanningSamples());
 			Rs2PathApi.recordShadowWalkerOutcome(WalkerState.ARRIVED, false, false);
 			Rs2PlannerShadowStats afterOutcome = Rs2PathApi.getShadowStats();
 			assertEquals(before.getExecution().getArrived(),
@@ -1006,6 +1063,8 @@ public class Rs2PathApiPlanningTest
 			Rs2PathApi.getPathfinderFuture().get(
 				ACTIVE_ROUTE_TEST_TIMEOUT_SECONDS, TimeUnit.SECONDS);
 			assertEquals(before.getSubmitted(), Rs2PathApi.getShadowStats().getSubmitted());
+			assertEquals(before.getCanaryPerformance().getPlanningSamples(),
+				Rs2PathApi.getShadowStats().getCanaryPerformance().getPlanningSamples());
 		}
 		finally
 		{

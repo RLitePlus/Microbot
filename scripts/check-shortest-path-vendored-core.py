@@ -85,6 +85,35 @@ def verify_offline(root: Path, baseline: dict[str, Any]) -> list[str]:
     manifest = source_manifest(root)
     patched = set(baseline.get("patchedUpstreamFiles", []))
     added = set(baseline.get("adapterAddedFiles", []))
+    patch_policy = baseline.get("patchSurfacePolicy")
+    if not isinstance(patch_policy, dict):
+        failures.append("patchSurfacePolicy must be an object")
+    else:
+        maximum_patched = patch_policy.get("maximumPatchedUpstreamFiles")
+        maximum_added = patch_policy.get("maximumAdapterAddedFiles")
+        if not isinstance(maximum_patched, int) or isinstance(maximum_patched, bool) \
+                or maximum_patched < 0:
+            failures.append(
+                "patchSurfacePolicy.maximumPatchedUpstreamFiles must be a non-negative integer"
+            )
+        elif len(patched) > maximum_patched:
+            failures.append(
+                f"patched upstream file count {len(patched)} exceeds reviewed budget "
+                f"{maximum_patched}"
+            )
+        if not isinstance(maximum_added, int) or isinstance(maximum_added, bool) \
+                or maximum_added < 0:
+            failures.append(
+                "patchSurfacePolicy.maximumAdapterAddedFiles must be a non-negative integer"
+            )
+        elif len(added) > maximum_added:
+            failures.append(
+                f"adapter-added file count {len(added)} exceeds reviewed budget {maximum_added}"
+            )
+        if patch_policy.get("growthRequiresAdrAmendment") is not True:
+            failures.append(
+                "patchSurfacePolicy.growthRequiresAdrAmendment must be true"
+            )
     overlap = patched & added
     if overlap:
         failures.append(

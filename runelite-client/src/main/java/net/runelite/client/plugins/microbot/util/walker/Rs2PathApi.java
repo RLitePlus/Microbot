@@ -103,6 +103,14 @@ public final class Rs2PathApi
 	private static long shadowRecoveryArrivals;
 	private static long shadowRecoveryUnreachable;
 	private static long shadowRecoveryExits;
+	private static long canaryPlanningSamples;
+	private static long canaryPlanningNanosTotal;
+	private static long canaryPlanningNanosMax;
+	private static long canaryLocalSearchNanosTotal;
+	private static long canaryLocalSearchNanosMax;
+	private static long canaryUpstreamSearchSamples;
+	private static long canaryUpstreamSearchNanosTotal;
+	private static long canaryUpstreamSearchNanosMax;
 	private static volatile Rs2PlannerShadowComparison lastShadowComparison;
 	private static volatile Rs2PlannerShadowComparison lastRouteShapeDifference;
 	private static volatile Rs2PlannerShadowComparison lastDivergence;
@@ -434,6 +442,7 @@ public final class Rs2PathApi
 					? resolvePolicy(request, config) : null;
 				Rs2PlanningSnapshot normalSnapshot = comparisonEnabled
 					? resolvePlanningSnapshot(normalRequest, config) : null;
+				long canaryPlanningStarted = System.nanoTime();
 				Pathfinder normal = runLocalPlanner(config, request);
 				Pathfinder walkingOnly;
 				Rs2RouteRequest walkingRequest = null;
@@ -483,7 +492,10 @@ public final class Rs2PathApi
 						replaceActivePathfinderLocked(selected, materialized);
 					}
 					recordPlannerComparison(evaluation);
-					recordCanaryOutcome(evaluation.comparison);
+					recordCanaryOutcome(
+						evaluation.comparison,
+						elapsedNanos(canaryPlanningStarted),
+						combinedSearchNanos(normal, walkingOnly));
 				}
 				else if (plannerMode == PlannerSelectionMode.SHADOW)
 				{
@@ -517,6 +529,7 @@ public final class Rs2PathApi
 			activeRouteComparisonEligible = plannerMode == PlannerSelectionMode.SHADOW
 				|| isF2pCanary(plannerMode, comparisonRequest);
 			long routeGeneration = activeRouteGeneration.get();
+			long canaryPlanningStarted = System.nanoTime();
 			setPathfinderFuture(executor.submit(() ->
 			{
 				active.run();
@@ -528,7 +541,7 @@ public final class Rs2PathApi
 				{
 					runActiveCanarySelection(
 						active, routeGeneration, comparisonRequest, comparisonSnapshot,
-						config, invocation);
+						config, invocation, canaryPlanningStarted);
 					return;
 				}
 				if (plannerMode != PlannerSelectionMode.SHADOW)
@@ -576,7 +589,8 @@ public final class Rs2PathApi
 		Rs2RouteRequest request,
 		Rs2PlanningSnapshot planningSnapshot,
 		PathfinderConfig config,
-		Rs2PlannerShadowContext.Invocation invocation)
+		Rs2PlannerShadowContext.Invocation invocation,
+		long canaryPlanningStarted)
 	{
 		synchronized (getPathfinderMutex())
 		{
@@ -614,7 +628,10 @@ public final class Rs2PathApi
 				replaceActivePathfinderLocked(active, materialized);
 			}
 			recordPlannerComparison(evaluation);
-			recordCanaryOutcome(evaluation.comparison);
+			recordCanaryOutcome(
+				evaluation.comparison,
+				elapsedNanos(canaryPlanningStarted),
+				evaluation.comparison.getLocalSearchNanos());
 		}
 	}
 
@@ -692,6 +709,7 @@ public final class Rs2PathApi
 				}
 				Rs2RouteRequest resolved = resolvePolicy(request, config);
 				Rs2PlanningSnapshot snapshot = resolvePlanningSnapshot(resolved, config);
+				long canaryPlanningStarted = System.nanoTime();
 				Rs2RouteResult local = localPlanner(config).plan(resolved, snapshot);
 				PlannerSelectionMode plannerMode = config.getPlannerSelectionMode();
 				if (isF2pCanary(plannerMode, resolved))
@@ -703,7 +721,10 @@ public final class Rs2PathApi
 						Rs2PlannerShadowContext.Invocation.SYNCHRONOUS_QUERY,
 						false);
 					recordPlannerComparison(evaluation);
-					recordCanaryOutcome(evaluation.comparison);
+					recordCanaryOutcome(
+						evaluation.comparison,
+						elapsedNanos(canaryPlanningStarted),
+						evaluation.comparison.getLocalSearchNanos());
 					return shouldSelectUpstream(evaluation.comparison)
 						? evaluation.candidate : local;
 				}
@@ -890,7 +911,16 @@ public final class Rs2PathApi
 					shadowWalkerExits,
 					shadowRecoveryArrivals,
 					shadowRecoveryUnreachable,
-					shadowRecoveryExits));
+					shadowRecoveryExits),
+				new Rs2PlannerCanaryPerformanceStats(
+					canaryPlanningSamples,
+					canaryPlanningNanosTotal,
+					canaryPlanningNanosMax,
+					canaryLocalSearchNanosTotal,
+					canaryLocalSearchNanosMax,
+					canaryUpstreamSearchSamples,
+					canaryUpstreamSearchNanosTotal,
+					canaryUpstreamSearchNanosMax));
 		}
 	}
 
@@ -1075,7 +1105,10 @@ public final class Rs2PathApi
 		}
 	}
 
-	private static void recordCanaryOutcome(Rs2PlannerShadowComparison comparison)
+	private static void recordCanaryOutcome(
+		Rs2PlannerShadowComparison comparison,
+		long planningNanos,
+		long localPlanningNanos)
 	{
 		synchronized (shadowEvidenceMutex)
 		{
@@ -1087,7 +1120,58 @@ public final class Rs2PathApi
 				default: throw new IllegalStateException(
 					"unhandled canary comparison status " + comparison.getStatus());
 			}
+			if (planningNanos < 0L || localPlanningNanos < 0L)
+			{
+				throw new IllegalArgumentException(
+					"canary planning and local search durations must be available");
+			}
+			canaryPlanningSamples++;
+			canaryPlanningNanosTotal = saturatedAdd(
+				canaryPlanningNanosTotal, planningNanos);
+			canaryPlanningNanosMax = Math.max(canaryPlanningNanosMax, planningNanos);
+			canaryLocalSearchNanosTotal = saturatedAdd(
+				canaryLocalSearchNanosTotal, localPlanningNanos);
+			canaryLocalSearchNanosMax = Math.max(
+				canaryLocalSearchNanosMax, localPlanningNanos);
+			long upstreamSearchNanos = comparison.getShadowSearchNanos();
+			if (upstreamSearchNanos >= 0L)
+			{
+				canaryUpstreamSearchSamples++;
+				canaryUpstreamSearchNanosTotal = saturatedAdd(
+					canaryUpstreamSearchNanosTotal, upstreamSearchNanos);
+				canaryUpstreamSearchNanosMax = Math.max(
+					canaryUpstreamSearchNanosMax, upstreamSearchNanos);
+			}
 		}
+	}
+
+	private static long elapsedNanos(long started)
+	{
+		return Math.max(0L, System.nanoTime() - started);
+	}
+
+	private static long combinedSearchNanos(Pathfinder... pathfinders)
+	{
+		long total = 0L;
+		for (Pathfinder pathfinder : pathfinders)
+		{
+			long searchNanos = activeSearchNanos(pathfinder);
+			if (searchNanos < 0L)
+			{
+				return Rs2RouteMetrics.UNAVAILABLE;
+			}
+			total = saturatedAdd(total, searchNanos);
+		}
+		return total;
+	}
+
+	private static long saturatedAdd(long left, long right)
+	{
+		if (right > Long.MAX_VALUE - left)
+		{
+			return Long.MAX_VALUE;
+		}
+		return left + right;
 	}
 
 	/** A route-shape-only difference is a semantic match and remains eligible for the canary. */

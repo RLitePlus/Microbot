@@ -52,6 +52,16 @@ def result(*, rollback=False, started=123, completed=10, arrivals=10):
             "recoveryUnreachable": 0,
             "recoveryExited": 0,
         },
+        "canaryPerformance": {
+            "planningSamples": completed,
+            "planningNanosTotal": completed * (60_000_000 if rollback else 100_000_000),
+            "planningNanosMax": 60_000_000 if rollback else 100_000_000,
+            "localSearchNanosTotal": completed * 40_000_000,
+            "localSearchNanosMax": 40_000_000,
+            "upstreamSearchSamples": 0 if rollback else completed,
+            "upstreamSearchNanosTotal": 0 if rollback else completed * 30_000_000,
+            "upstreamSearchNanosMax": 0 if rollback else 30_000_000,
+        },
         "coverage": {
             "ACTIVE_ROUTE": dict(outcome),
             "UNDERGROUND_COORDINATES": dict(outcome),
@@ -145,6 +155,36 @@ class WalkerRolloutEvidenceTest(unittest.TestCase):
         self.assertEqual("REJECTED", report["verdict"])
         self.assertTrue(any("every repetition" in value for value in report["failures"]))
 
+    def test_canary_planning_samples_must_cover_every_comparison(self):
+        normal = result()
+        normal["shadowEvidence"]["canaryPerformance"]["planningSamples"] = 9
+
+        report = MODULE.evaluate(normal, result(rollback=True, started=456), REVISION)
+
+        self.assertEqual("REJECTED", report["verdict"])
+        self.assertTrue(any("planningSamples" in value for value in report["failures"]))
+
+    def test_canary_readiness_maximum_is_a_release_gate(self):
+        normal = result()
+        performance = normal["shadowEvidence"]["canaryPerformance"]
+        performance["planningNanosMax"] = 2_000_000_001
+        performance["planningNanosTotal"] = 2_900_000_001
+
+        report = MODULE.evaluate(normal, result(rollback=True, started=456), REVISION)
+
+        self.assertEqual("REJECTED", report["verdict"])
+        self.assertTrue(any("planning maximum" in value for value in report["failures"]))
+
+    def test_combined_canary_non_search_overhead_is_a_release_gate(self):
+        normal = result()
+        performance = normal["shadowEvidence"]["canaryPerformance"]
+        performance["planningNanosTotal"] = 3_300_000_000
+
+        report = MODULE.evaluate(normal, result(rollback=True, started=456), REVISION)
+
+        self.assertEqual("REJECTED", report["verdict"])
+        self.assertTrue(any("non-search overhead" in value for value in report["failures"]))
+
     def test_wrong_engine_and_failure_message_reject(self):
         rollback = result(rollback=True, started=456)
         rollback["shadowEvidence"]["candidateEngineId"] = "shortest-path-upstream@" + "0" * 40
@@ -165,6 +205,8 @@ class WalkerRolloutEvidenceTest(unittest.TestCase):
         self.assertIn("`ACCEPTED`", text)
         self.assertIn("Normal canary", text)
         self.assertIn("Forced rollback", text)
+        self.assertIn("Ready/local", text)
+        self.assertIn("Non-search avg ms", text)
 
 
 if __name__ == "__main__":

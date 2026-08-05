@@ -23,6 +23,7 @@ public final class Rs2PlannerShadowStats
 	private final Map<Rs2TransportExecutor, Rs2PlannerShadowCoverageStats> transportExecutors;
 	private final Map<Rs2TransportType, Rs2PlannerShadowCoverageStats> transportTypes;
 	private final Rs2WalkerShadowExecutionStats execution;
+	private final Rs2PlannerCanaryPerformanceStats canaryPerformance;
 
 	Rs2PlannerShadowStats(
 		long submitted,
@@ -40,7 +41,8 @@ public final class Rs2PlannerShadowStats
 		Map<Rs2PlannerShadowContext.Coverage, Rs2PlannerShadowCoverageStats> coverage,
 		Map<Rs2TransportExecutor, Rs2PlannerShadowCoverageStats> transportExecutors,
 		Map<Rs2TransportType, Rs2PlannerShadowCoverageStats> transportTypes,
-		Rs2WalkerShadowExecutionStats execution)
+		Rs2WalkerShadowExecutionStats execution,
+		Rs2PlannerCanaryPerformanceStats canaryPerformance)
 	{
 		this.submitted = requireNonNegative(submitted, "submitted");
 		this.completed = requireNonNegative(completed, "completed");
@@ -71,6 +73,8 @@ public final class Rs2PlannerShadowStats
 		typeCopy.putAll(transportTypes);
 		this.transportTypes = Collections.unmodifiableMap(typeCopy);
 		this.execution = java.util.Objects.requireNonNull(execution, "execution");
+		this.canaryPerformance = java.util.Objects.requireNonNull(
+			canaryPerformance, "canaryPerformance");
 		if (matches + divergences + failures != completed)
 		{
 			throw new IllegalArgumentException(
@@ -112,6 +116,7 @@ public final class Rs2PlannerShadowStats
 		return transportTypes;
 	}
 	public Rs2WalkerShadowExecutionStats getExecution() { return execution; }
+	public Rs2PlannerCanaryPerformanceStats getCanaryPerformance() { return canaryPerformance; }
 
 	public long getPending()
 	{

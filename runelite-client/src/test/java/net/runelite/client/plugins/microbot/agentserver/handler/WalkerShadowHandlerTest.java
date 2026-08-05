@@ -31,6 +31,16 @@ public class WalkerShadowHandlerTest
 		assertTrue(snapshot.containsKey("transportExecutors"));
 		assertTrue(snapshot.containsKey("transportTypes"));
 		assertTrue(snapshot.containsKey("execution"));
+		assertTrue(snapshot.containsKey("canaryPerformance"));
+		@SuppressWarnings("unchecked")
+		Map<String, Object> canaryPerformance =
+			(Map<String, Object>) snapshot.get("canaryPerformance");
+		assertTrue(canaryPerformance.containsKey("planningSamples"));
+		assertTrue(canaryPerformance.containsKey("planningNanosTotal"));
+		assertTrue(canaryPerformance.containsKey("planningNanosMax"));
+		assertTrue(canaryPerformance.containsKey("localSearchNanosTotal"));
+		assertTrue(canaryPerformance.containsKey("upstreamSearchSamples"));
+		assertTrue(canaryPerformance.containsKey("upstreamSearchNanosTotal"));
 		assertTrue(snapshot.containsKey("latest"));
 		assertTrue(snapshot.containsKey("latestRouteShapeDifference"));
 		assertTrue(snapshot.containsKey("latestDivergence"));

@@ -127,7 +127,13 @@ scripts/evaluate-walker-rollout-evidence.py \
 
 The paired evaluator requires the pinned candidate, distinct client sessions, the same required route set,
 settled accounting, ten normal upstream selections and arrivals, and ten forced failure fallbacks and
-arrivals. Its report is coordinate-free and rejects exception-message exposure.
+arrivals. It also requires one coordinate-free canary-readiness timing sample per completed comparison,
+rejects a submission-to-ready maximum above `2,000 ms`, and rejects average non-search overhead above `250 ms`
+per decision after subtracting both measured searches. Readiness includes executor queueing, both searches,
+semantic comparison, selection/fallback and route materialization. Its report is coordinate-free and rejects
+exception-message exposure. The fresh 2026-08-05 pair passes with no failure, shortfall or warning: normal
+readiness averaged `268.3 ms`, peaked at `574.4 ms` and averaged `186.0 ms` of non-search overhead; forced
+rollback averaged `213.7 ms`, peaked at `332.7 ms` and averaged `134.1 ms` of non-search overhead.
 
 Prerequisite-bearing selection-gate routes are intentionally excluded from the default fresh-account suite.
 Run them explicitly on a suitable profile:
