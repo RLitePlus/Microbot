@@ -1,14 +1,16 @@
 package net.runelite.client.plugins.microbot.testing.webwalker;
 
 import net.runelite.api.coords.WorldPoint;
+import net.runelite.client.plugins.microbot.util.walker.Rs2TransportExecutor;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
 
 final class F2PWebWalkerRoute {
-    static final List<F2PWebWalkerRoute> ROUTES = List.of(
+    static final List<F2PWebWalkerRoute> REQUIRED_ROUTES = List.of(
             route("F2P-01", "Lumbridge courtyard to Lumbridge bank",
                     point(3222, 3218, 0), point(3208, 3220, 2), 1, 1),
             route("F2P-02", "Lumbridge bank to cow pen",
@@ -41,9 +43,28 @@ final class F2PWebWalkerRoute {
                     point(3109, 3341, 0), point(3106, 3363, 0), 1, 1),
             route("F2P-16", "Draynor Manor interior to Draynor bank",
                     point(3106, 3363, 0), point(3092, 3245, 0), 1, 2),
-            currentRoute("F2P-17", "Current location to Varrock Sewers",
-                    point(3237, 9858, 0), 1, 1, 5, true, true)
+            repeatedRoute("F2P-17", "Varrock manhole to Varrock Sewers",
+                    point(3236, 3458, 0), point(3237, 9858, 0), 1, 1, 5, true, true)
     );
+    static final List<F2PWebWalkerRoute> SELECTION_GATE_ROUTES = List.of(
+            bankSelectionGateRoute("F2P-18", "Lumbridge to Champions' Guild by canoe",
+                    point(3243, 3237, 0), point(3199, 3344, 0), 2, 2, 3,
+                    true, false, Rs2TransportExecutor.CANOE, 5, 10),
+            selectionGateRoute("F2P-19", "Port Sarim to Musa Point by ship",
+                    point(3029, 3217, 0), point(2956, 3146, 0), 1, 1, 2,
+                    false, true, Rs2TransportExecutor.TERMINAL_TRAVEL, 3),
+            activeReplanSelectionGateRoute("F2P-20", "Port Sarim to Falador with active replans",
+                    point(3029, 3217, 0), point(2946, 3368, 0), 2, 2, 12),
+            recoveryReplanSelectionGateRoute("F2P-21", "Port Sarim to Rimmington with recovery replans",
+                    point(3029, 3217, 0), point(2957, 3214, 0), 2, 2, 3, 2)
+    );
+    static final List<F2PWebWalkerRoute> ROUTES;
+
+    static {
+        List<F2PWebWalkerRoute> routes = new ArrayList<>(REQUIRED_ROUTES);
+        routes.addAll(SELECTION_GATE_ROUTES);
+        ROUTES = List.copyOf(routes);
+    }
 
     final String id;
     final String name;
@@ -56,6 +77,19 @@ final class F2PWebWalkerRoute {
     final boolean requireF2PWorld;
     final boolean forceNoAgilityShortcuts;
     final boolean forceNoTeleports;
+    final boolean forceCanoes;
+    final boolean forceShips;
+    final Rs2TransportExecutor expectedShadowExecutor;
+    final int minimumExpectedShadowExecutions;
+    final int forcedActiveReplans;
+    final int minimumExpectedActiveReplanComparisons;
+    final int forcedRecoveryReplans;
+    final int forcedSetupRecoveryReplans;
+    final int minimumExpectedRecoveryReplanComparisons;
+    final int minimumExpectedRecoveryArrivals;
+    final int forcedBankRouteComparisons;
+    final int minimumExpectedBankRouteFromBankComparisons;
+    final int minimumExpectedBankRouteFromBankItemGatedComparisons;
 
     private F2PWebWalkerRoute(
             String id,
@@ -68,7 +102,20 @@ final class F2PWebWalkerRoute {
             boolean currentLocationStart,
             boolean requireF2PWorld,
             boolean forceNoAgilityShortcuts,
-            boolean forceNoTeleports
+            boolean forceNoTeleports,
+            boolean forceCanoes,
+            boolean forceShips,
+            Rs2TransportExecutor expectedShadowExecutor,
+            int minimumExpectedShadowExecutions,
+            int forcedActiveReplans,
+            int minimumExpectedActiveReplanComparisons,
+            int forcedRecoveryReplans,
+            int forcedSetupRecoveryReplans,
+            int minimumExpectedRecoveryReplanComparisons,
+            int minimumExpectedRecoveryArrivals,
+            int forcedBankRouteComparisons,
+            int minimumExpectedBankRouteFromBankComparisons,
+            int minimumExpectedBankRouteFromBankItemGatedComparisons
     ) {
         this.id = id;
         this.name = name;
@@ -81,11 +128,25 @@ final class F2PWebWalkerRoute {
         this.requireF2PWorld = requireF2PWorld;
         this.forceNoAgilityShortcuts = forceNoAgilityShortcuts;
         this.forceNoTeleports = forceNoTeleports;
+        this.forceCanoes = forceCanoes;
+        this.forceShips = forceShips;
+        this.expectedShadowExecutor = expectedShadowExecutor;
+        this.minimumExpectedShadowExecutions = minimumExpectedShadowExecutions;
+        this.forcedActiveReplans = forcedActiveReplans;
+        this.minimumExpectedActiveReplanComparisons = minimumExpectedActiveReplanComparisons;
+        this.forcedRecoveryReplans = forcedRecoveryReplans;
+        this.forcedSetupRecoveryReplans = forcedSetupRecoveryReplans;
+        this.minimumExpectedRecoveryReplanComparisons = minimumExpectedRecoveryReplanComparisons;
+        this.minimumExpectedRecoveryArrivals = minimumExpectedRecoveryArrivals;
+        this.forcedBankRouteComparisons = forcedBankRouteComparisons;
+        this.minimumExpectedBankRouteFromBankComparisons = minimumExpectedBankRouteFromBankComparisons;
+        this.minimumExpectedBankRouteFromBankItemGatedComparisons =
+                minimumExpectedBankRouteFromBankItemGatedComparisons;
     }
 
     static List<F2PWebWalkerRoute> selected(String routeFilter) {
         if (routeFilter == null || routeFilter.isBlank() || "all".equalsIgnoreCase(routeFilter)) {
-            return ROUTES;
+            return REQUIRED_ROUTES;
         }
 
         List<String> requested = Arrays.stream(routeFilter.split(","))
@@ -114,12 +175,14 @@ final class F2PWebWalkerRoute {
             int destinationTolerance
     ) {
         return new F2PWebWalkerRoute(id, name, start, destination, startTolerance, destinationTolerance,
-                1, false, false, false, false);
+                1, false, false, false, false, false, false, null, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0);
     }
 
-    private static F2PWebWalkerRoute currentRoute(
+    private static F2PWebWalkerRoute repeatedRoute(
             String id,
             String name,
+            WorldPoint start,
             WorldPoint destination,
             int startTolerance,
             int destinationTolerance,
@@ -127,8 +190,78 @@ final class F2PWebWalkerRoute {
             boolean forceNoAgilityShortcuts,
             boolean forceNoTeleports
     ) {
-        return new F2PWebWalkerRoute(id, name, null, destination, startTolerance, destinationTolerance,
-                repetitions, true, true, forceNoAgilityShortcuts, forceNoTeleports);
+        return new F2PWebWalkerRoute(id, name, start, destination, startTolerance, destinationTolerance,
+                repetitions, false, true, forceNoAgilityShortcuts, forceNoTeleports, false, false, null, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0);
+    }
+
+    private static F2PWebWalkerRoute selectionGateRoute(
+            String id,
+            String name,
+            WorldPoint start,
+            WorldPoint destination,
+            int startTolerance,
+            int destinationTolerance,
+            int repetitions,
+            boolean forceCanoes,
+            boolean forceShips,
+            Rs2TransportExecutor expectedShadowExecutor,
+            int minimumExpectedShadowExecutions
+    ) {
+        return new F2PWebWalkerRoute(id, name, start, destination, startTolerance, destinationTolerance,
+                repetitions, false, false, true, true, forceCanoes, forceShips, expectedShadowExecutor,
+                minimumExpectedShadowExecutions, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    }
+
+    private static F2PWebWalkerRoute bankSelectionGateRoute(
+            String id,
+            String name,
+            WorldPoint start,
+            WorldPoint destination,
+            int startTolerance,
+            int destinationTolerance,
+            int repetitions,
+            boolean forceCanoes,
+            boolean forceShips,
+            Rs2TransportExecutor expectedShadowExecutor,
+            int minimumExpectedShadowExecutions,
+            int bankRouteComparisons
+    ) {
+        return new F2PWebWalkerRoute(id, name, start, destination, startTolerance, destinationTolerance,
+                repetitions, false, false, true, true, forceCanoes, forceShips, expectedShadowExecutor,
+                minimumExpectedShadowExecutions, 0, 0, 0, 0, 0, 0,
+                bankRouteComparisons, bankRouteComparisons, bankRouteComparisons);
+    }
+
+    private static F2PWebWalkerRoute activeReplanSelectionGateRoute(
+            String id,
+            String name,
+            WorldPoint start,
+            WorldPoint destination,
+            int startTolerance,
+            int destinationTolerance,
+            int forcedActiveReplans
+    ) {
+        return new F2PWebWalkerRoute(id, name, start, destination, startTolerance, destinationTolerance,
+                1, false, false, true, true, false, true, null, 0,
+                forcedActiveReplans, forcedActiveReplans, 0, 0, 0, 0, 0, 0, 0);
+    }
+
+    private static F2PWebWalkerRoute recoveryReplanSelectionGateRoute(
+            String id,
+            String name,
+            WorldPoint start,
+            WorldPoint destination,
+            int startTolerance,
+            int destinationTolerance,
+            int repetitions,
+            int forcedRecoveryReplans
+    ) {
+        int evidenceLegs = repetitions + Math.max(0, repetitions - 1);
+        return new F2PWebWalkerRoute(id, name, start, destination, startTolerance, destinationTolerance,
+                repetitions, false, true, true, true, false, false, null, 0,
+                0, 0, forcedRecoveryReplans, forcedRecoveryReplans,
+                evidenceLegs * forcedRecoveryReplans, evidenceLegs, 0, 0, 0);
     }
 
     private static WorldPoint point(int x, int y, int plane) {
