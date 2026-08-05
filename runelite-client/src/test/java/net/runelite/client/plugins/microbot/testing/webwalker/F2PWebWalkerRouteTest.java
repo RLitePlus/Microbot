@@ -80,4 +80,31 @@ public class F2PWebWalkerRouteTest {
         assertFalse("recovery evidence route must not run in the default fresh-account suite",
                 F2PWebWalkerRoute.selected("all").contains(route));
     }
+
+    @Test
+    public void membersSliceIsExplicitAndNeverPartOfTheDefaultF2pSuite() {
+        assertEquals(4, F2PWebWalkerRoute.selected("members").size());
+
+        F2PWebWalkerRoute ferry = F2PWebWalkerRoute.selected("P2P-01").get(0);
+        assertTrue(ferry.requireMembersWorld);
+        assertFalse(ferry.requireF2PWorld);
+        assertEquals(Rs2TransportExecutor.TERMINAL_TRAVEL, ferry.expectedShadowExecutor);
+        assertEquals(5, ferry.minimumExpectedShadowExecutions);
+
+        F2PWebWalkerRoute glider = F2PWebWalkerRoute.selected("P2P-02").get(0);
+        assertTrue(glider.requireMembersWorld);
+        assertEquals(Rs2TransportExecutor.GNOME_GLIDER, glider.expectedShadowExecutor);
+
+        F2PWebWalkerRoute spiritTree = F2PWebWalkerRoute.selected("P2P-03").get(0);
+        assertTrue(spiritTree.requireMembersWorld);
+        assertEquals(Rs2TransportExecutor.SPIRIT_TREE, spiritTree.expectedShadowExecutor);
+
+        F2PWebWalkerRoute membersShip = F2PWebWalkerRoute.selected("P2P-04").get(0);
+        assertTrue(membersShip.requireMembersWorld);
+        assertEquals(Rs2TransportExecutor.TERMINAL_TRAVEL,
+                membersShip.expectedShadowExecutor);
+
+        assertTrue(F2PWebWalkerRoute.selected("all").stream()
+                .noneMatch(route -> route.requireMembersWorld));
+    }
 }

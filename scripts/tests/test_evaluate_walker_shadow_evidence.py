@@ -68,7 +68,121 @@ def snapshot(*, completed=100, enabled=True, divergences=0, failures=0, started=
     }
 
 
+def members_snapshot(*, started=123):
+    value = snapshot(completed=30, started=started)
+    value["plannerMode"] = "SHADOW"
+    for tag, required in MODULE.MEMBERS_REQUIRED_COVERAGE.items():
+        value["coverage"][tag] = {
+            "completed": required,
+            "matches": required,
+            "divergences": 0,
+            "failures": 0,
+        }
+    value["transportExecutors"].update(
+        {
+            "FAIRY_RING": {
+                "completed": 3,
+                "matches": 3,
+                "divergences": 0,
+                "failures": 0,
+            },
+            "TERMINAL_TRAVEL": {
+                "completed": 2,
+                "matches": 2,
+                "divergences": 0,
+                "failures": 0,
+            },
+        }
+    )
+    value["execution"] = {
+        "terminal": 10,
+        "arrived": 10,
+        "unreachable": 0,
+        "exited": 0,
+        "recoveryTerminal": 1,
+        "recoveryArrived": 1,
+        "recoveryUnreachable": 0,
+        "recoveryExited": 0,
+    }
+    return value
+
+
+def evaluate_members(value):
+    return MODULE.evaluate(
+        value,
+        REVISION,
+        minimum_completed=MODULE.MEMBERS_MINIMUM_COMPLETED,
+        required_coverage=MODULE.MEMBERS_REQUIRED_COVERAGE,
+        minimum_distinct_transport_executors=(
+            MODULE.MEMBERS_MINIMUM_DISTINCT_TRANSPORT_EXECUTORS
+        ),
+        required_executor_groups=MODULE.MEMBERS_REQUIRED_EXECUTOR_GROUPS,
+        minimum_walker_arrivals=MODULE.MEMBERS_MINIMUM_WALKER_ARRIVALS,
+        minimum_recovery_arrivals=MODULE.MEMBERS_MINIMUM_RECOVERY_ARRIVALS,
+        minimum_sessions=1,
+        expected_planner_mode="SHADOW",
+        evidence_profile="members",
+    )
+
+
 class WalkerShadowEvidenceTest(unittest.TestCase):
+    def test_members_profile_accepts_members_requirement_and_network_evidence(self):
+        result = evaluate_members(members_snapshot())
+
+        self.assertEqual("ACCEPTED", result["verdict"])
+        self.assertEqual("members", result["evidenceProfile"])
+        self.assertEqual("SHADOW", result["plannerMode"])
+
+    def test_members_profile_rejects_canary_mode(self):
+        value = members_snapshot()
+        value["plannerMode"] = "UPSTREAM_F2P_CANARY"
+
+        result = evaluate_members(value)
+
+        self.assertEqual("REJECTED", result["verdict"])
+        self.assertTrue(any("plannerMode" in item for item in result["failures"]))
+
+    def test_members_profile_requires_non_item_requirement_evidence(self):
+        value = members_snapshot()
+        value["coverage"]["SELECTS_NON_ITEM_REQUIREMENT_GATED_TRANSPORT"] = {
+            "completed": 0,
+            "matches": 0,
+            "divergences": 0,
+            "failures": 0,
+        }
+
+        result = evaluate_members(value)
+
+        self.assertEqual("INSUFFICIENT_EVIDENCE", result["verdict"])
+        self.assertTrue(
+            any("NON_ITEM_REQUIREMENT" in item for item in result["evidenceShortfalls"])
+        )
+
+    def test_members_profile_requires_multiple_fresh_sessions(self):
+        merged = MODULE.merge_snapshots(
+            [members_snapshot(started=123), members_snapshot(started=456)],
+            REVISION,
+            expected_planner_mode="SHADOW",
+        )
+        result = MODULE.evaluate(
+            merged,
+            REVISION,
+            minimum_completed=MODULE.MEMBERS_MINIMUM_COMPLETED,
+            required_coverage=MODULE.MEMBERS_REQUIRED_COVERAGE,
+            minimum_distinct_transport_executors=(
+                MODULE.MEMBERS_MINIMUM_DISTINCT_TRANSPORT_EXECUTORS
+            ),
+            required_executor_groups=MODULE.MEMBERS_REQUIRED_EXECUTOR_GROUPS,
+            minimum_walker_arrivals=MODULE.MEMBERS_MINIMUM_WALKER_ARRIVALS,
+            minimum_recovery_arrivals=MODULE.MEMBERS_MINIMUM_RECOVERY_ARRIVALS,
+            minimum_sessions=MODULE.MEMBERS_MINIMUM_SESSIONS,
+            expected_planner_mode="SHADOW",
+            evidence_profile="members",
+        )
+
+        self.assertEqual("INSUFFICIENT_EVIDENCE", result["verdict"])
+        self.assertTrue(any("fresh client session" in item for item in result["evidenceShortfalls"]))
+
     def test_multiple_fresh_sessions_are_aggregated(self):
         merged = MODULE.merge_snapshots(
             [snapshot(started=123), snapshot(started=456)], REVISION

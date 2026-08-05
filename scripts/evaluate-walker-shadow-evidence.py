@@ -64,6 +64,35 @@ DEFAULT_REQUIRED_EXECUTOR_GROUPS = {
     },
 }
 
+MEMBERS_REQUIRED_COVERAGE = {
+    "ACTIVE_ROUTE": 20,
+    "MEMBERS_WORLD_POLICY": 30,
+    "USES_TRANSPORT": 15,
+    "SELECTS_MEMBERS_TRANSPORT": 5,
+    "SELECTS_NON_ITEM_REQUIREMENT_GATED_TRANSPORT": 5,
+}
+MEMBERS_REQUIRED_EXECUTOR_GROUPS = {
+    "MEMBERS_NETWORK": {
+        "minimum": 5,
+        "executors": (
+            "FAIRY_RING",
+            "GNOME_GLIDER",
+            "HOT_AIR_BALLOON",
+            "MAGIC_CARPET",
+            "MAGIC_MUSHTREE",
+            "QUETZAL",
+            "SPIRIT_TREE",
+            "TERMINAL_TRAVEL",
+            "WILDERNESS_OBELISK",
+        ),
+    },
+}
+MEMBERS_MINIMUM_COMPLETED = 30
+MEMBERS_MINIMUM_DISTINCT_TRANSPORT_EXECUTORS = 2
+MEMBERS_MINIMUM_WALKER_ARRIVALS = 10
+MEMBERS_MINIMUM_RECOVERY_ARRIVALS = 1
+MEMBERS_MINIMUM_SESSIONS = 3
+
 
 def load_json(path: Path) -> dict[str, Any]:
     value = json.loads(path.read_text(encoding="utf-8"))
@@ -133,6 +162,9 @@ def evaluate(
     required_executor_groups: dict[str, dict[str, Any]] | None = None,
     minimum_walker_arrivals: int = DEFAULT_MINIMUM_WALKER_ARRIVALS,
     minimum_recovery_arrivals: int = DEFAULT_MINIMUM_RECOVERY_ARRIVALS,
+    minimum_sessions: int = 1,
+    expected_planner_mode: str | None = None,
+    evidence_profile: str = "f2p",
 ) -> dict[str, Any]:
     if snapshot.get("schemaVersion") != 2:
         raise ValueError("snapshot.schemaVersion must be 2")
@@ -144,6 +176,8 @@ def evaluate(
         raise ValueError("minimum_distinct_transport_executors must be positive")
     if minimum_walker_arrivals <= 0 or minimum_recovery_arrivals <= 0:
         raise ValueError("walker arrival requirements must be positive")
+    if minimum_sessions <= 0:
+        raise ValueError("minimum_sessions must be positive")
     requirements = dict(
         DEFAULT_REQUIRED_COVERAGE if required_coverage is None else required_coverage
     )
@@ -166,9 +200,21 @@ def evaluate(
         )
     if snapshot.get("enabled") is not True:
         shortfalls.append("upstream planner shadow mode was not enabled at capture")
+    planner_mode = snapshot.get("plannerMode")
+    if expected_planner_mode is not None and planner_mode != expected_planner_mode:
+        failures.append(
+            f"plannerMode={planner_mode!r}, expected {expected_planner_mode!r}"
+        )
     started_at_epoch_millis = non_negative_int(
         snapshot, "startedAtEpochMillis", "snapshot"
     )
+    session_count = snapshot.get("sessionCount", 1)
+    if not isinstance(session_count, int) or isinstance(session_count, bool) or session_count <= 0:
+        raise ValueError("snapshot.sessionCount must be a positive integer")
+    if session_count < minimum_sessions:
+        shortfalls.append(
+            f"only {session_count} fresh client session(s); {minimum_sessions} required"
+        )
 
     totals = snapshot.get("totals")
     if not isinstance(totals, dict):
@@ -468,11 +514,14 @@ def evaluate(
         verdict = "ACCEPTED"
     return {
         "schemaVersion": 1,
+        "evidenceProfile": evidence_profile,
         "verdict": verdict,
         "candidateEngineId": actual_engine,
         "reviewedCommit": reviewed_commit,
         "startedAtEpochMillis": started_at_epoch_millis,
-        "sessionCount": snapshot.get("sessionCount", 1),
+        "plannerMode": planner_mode,
+        "sessionCount": session_count,
+        "minimumSessions": minimum_sessions,
         "minimumCompleted": minimum_completed,
         "totals": dict(totals),
         "coverage": coverage_rows,
@@ -492,7 +541,12 @@ def evaluate(
     }
 
 
-def merge_snapshots(snapshots: list[dict[str, Any]], reviewed_commit: str) -> dict[str, Any]:
+def merge_snapshots(
+    snapshots: list[dict[str, Any]],
+    reviewed_commit: str,
+    *,
+    expected_planner_mode: str | None = None,
+) -> dict[str, Any]:
     if not snapshots:
         raise ValueError("at least one snapshot is required")
 
@@ -513,6 +567,7 @@ def merge_snapshots(snapshots: list[dict[str, Any]], reviewed_commit: str) -> di
             required_executor_groups=zero_groups,
             minimum_walker_arrivals=1,
             minimum_recovery_arrivals=1,
+            expected_planner_mode=expected_planner_mode,
         )
         if session_report["failures"]:
             raise ValueError(
@@ -535,6 +590,8 @@ def merge_snapshots(snapshots: list[dict[str, Any]], reviewed_commit: str) -> di
     merged = copy.deepcopy(snapshots[0])
     merged["enabled"] = all(snapshot.get("enabled") is True for snapshot in snapshots)
     merged["candidateEngineId"] = expected_engine
+    if expected_planner_mode is not None:
+        merged["plannerMode"] = expected_planner_mode
     merged["startedAtEpochMillis"] = min(starts)
     merged["sessionCount"] = len(snapshots)
     merged["sessionStartedAtEpochMillis"] = starts
@@ -644,7 +701,11 @@ def markdown(report: dict[str, Any]) -> str:
         "",
         f"Candidate: `{report['candidateEngineId']}`",
         "",
-        f"Fresh client sessions: {report['sessionCount']}.",
+        f"Evidence profile: `{report['evidenceProfile']}`; planner mode: "
+        f"`{report['plannerMode']}`.",
+        "",
+        f"Fresh client sessions: {report['sessionCount']} / "
+        f"{report['minimumSessions']} required.",
         "",
         f"Completed: {totals['completed']} / {report['minimumCompleted']} required; "
         f"matches: {totals['matches']}; divergences: {totals['divergences']}; "
@@ -742,7 +803,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("snapshot", type=Path, nargs="+")
     parser.add_argument("--baseline", type=Path, default=DEFAULT_BASELINE)
-    parser.add_argument("--minimum-completed", type=int, default=100)
+    parser.add_argument("--profile", choices=("f2p", "members"), default="f2p")
+    parser.add_argument("--minimum-completed", type=int)
     parser.add_argument("--json-output", type=Path)
     parser.add_argument("--markdown-output", type=Path)
     args = parser.parse_args()
@@ -752,10 +814,43 @@ def main() -> int:
         if not isinstance(reviewed_commit, str):
             raise ValueError("upstream baseline has no reviewedCommit")
         snapshots = [load_json(path) for path in args.snapshot]
+        members_profile = args.profile == "members"
+        expected_planner_mode = "SHADOW" if members_profile else None
         merged = snapshots[0] if len(snapshots) == 1 else merge_snapshots(
-            snapshots, reviewed_commit
+            snapshots, reviewed_commit, expected_planner_mode=expected_planner_mode
         )
-        report = evaluate(merged, reviewed_commit, minimum_completed=args.minimum_completed)
+        minimum_completed = args.minimum_completed
+        if minimum_completed is None:
+            minimum_completed = (
+                MEMBERS_MINIMUM_COMPLETED if members_profile else 100
+            )
+        report = evaluate(
+            merged,
+            reviewed_commit,
+            minimum_completed=minimum_completed,
+            required_coverage=(MEMBERS_REQUIRED_COVERAGE if members_profile else None),
+            minimum_distinct_transport_executors=(
+                MEMBERS_MINIMUM_DISTINCT_TRANSPORT_EXECUTORS
+                if members_profile
+                else DEFAULT_MINIMUM_DISTINCT_TRANSPORT_EXECUTORS
+            ),
+            required_executor_groups=(
+                MEMBERS_REQUIRED_EXECUTOR_GROUPS if members_profile else None
+            ),
+            minimum_walker_arrivals=(
+                MEMBERS_MINIMUM_WALKER_ARRIVALS
+                if members_profile
+                else DEFAULT_MINIMUM_WALKER_ARRIVALS
+            ),
+            minimum_recovery_arrivals=(
+                MEMBERS_MINIMUM_RECOVERY_ARRIVALS
+                if members_profile
+                else DEFAULT_MINIMUM_RECOVERY_ARRIVALS
+            ),
+            minimum_sessions=(MEMBERS_MINIMUM_SESSIONS if members_profile else 1),
+            expected_planner_mode=expected_planner_mode,
+            evidence_profile=args.profile,
+        )
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 2

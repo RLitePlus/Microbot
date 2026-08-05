@@ -21,6 +21,7 @@ import net.runelite.client.ui.overlay.worldmap.WorldMapPoint;
 
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.EnumSet;
@@ -1536,6 +1537,9 @@ public final class Rs2PathApi
 			transport.getCurrencyName(),
 			transport.getCurrencyAmount(),
 			itemRequirements,
+			Arrays.stream(transport.getSkillLevels()).anyMatch(level -> level > 0),
+			transport.isQuestLocked(),
+			!transport.getVarbits().isEmpty() || !transport.getVarplayers().isEmpty(),
 			transport);
 	}
 

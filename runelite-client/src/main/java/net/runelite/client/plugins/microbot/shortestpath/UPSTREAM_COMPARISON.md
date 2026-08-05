@@ -146,8 +146,9 @@ resource blobs are now recorded outside this narrative document so drift is mach
   exit. Seventy-six exact-shape differences are equal-cost alternatives with matching selected transports;
   retained diagnostics classify them across transport-free replan/recovery, bank/canoe and mixed surface
   slices, with none in the underground comparisons and none associated with a non-arrival. Five clean samples
-  from the reachable review revision pass the timing gate at a `0.421` upstream/local comparable-suite median
-  ratio. The explicit F2P selector and rollback test are also complete;
+  from the exact evaluated revision pass the timing gate at a `0.407` upstream/local comparable-suite median
+  ratio. Sanitized source snapshots and accepted reports are tracked under
+  `docs/evidence/walker/2026-08-05/`. The explicit F2P selector and rollback test are also complete;
   members-policy selection requires separate representative members-world evidence.
   `check-shortest-path-vendored-core.py` pins all source/metadata digests and can prove every undeclared file
   byte-identical to the reviewed checkout.

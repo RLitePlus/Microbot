@@ -24,11 +24,17 @@ public final class Rs2PlannerShadowContext
 		ACTIVE_ROUTE,
 		ACTIVE_REPLAN,
 		RECOVERY_REPLAN,
+		MEMBERS_WORLD_POLICY,
 		SURFACE_COORDINATES_ONLY,
 		UNDERGROUND_COORDINATES,
 		WALKING_ONLY_SELECTED,
 		USES_TRANSPORT,
+		SELECTS_MEMBERS_TRANSPORT,
 		SELECTS_ITEM_GATED_TRANSPORT,
+		SELECTS_SKILL_GATED_TRANSPORT,
+		SELECTS_QUEST_GATED_TRANSPORT,
+		SELECTS_STATE_GATED_TRANSPORT,
+		SELECTS_NON_ITEM_REQUIREMENT_GATED_TRANSPORT,
 		BANK_ITEMS_ENABLED,
 		BANK_ROUTE_DIRECT,
 		BANK_ROUTE_TO_BANK,
@@ -90,6 +96,10 @@ public final class Rs2PlannerShadowContext
 			EnumSet.noneOf(Rs2TransportExecutor.class);
 		EnumSet<Rs2TransportType> transportTypes = EnumSet.noneOf(Rs2TransportType.class);
 		boolean itemGatedTransport = false;
+		boolean membersTransport = false;
+		boolean skillGatedTransport = false;
+		boolean questGatedTransport = false;
+		boolean stateGatedTransport = false;
 		for (Rs2RouteStep step : local.getTransportSteps())
 		{
 			Rs2TransportEdge edge = step.getTransport().orElseThrow(IllegalStateException::new);
@@ -97,6 +107,14 @@ public final class Rs2PlannerShadowContext
 			transportTypes.add(edge.getType());
 			itemGatedTransport |= !edge.getItemRequirements().isEmpty()
 				|| edge.getCurrencyAmount() > 0;
+			membersTransport |= edge.isMembers();
+			skillGatedTransport |= edge.isSkillGated();
+			questGatedTransport |= edge.isQuestGated();
+			stateGatedTransport |= edge.isStateGated();
+		}
+		if (policy.isMembersWorld())
+		{
+			coverage.add(Coverage.MEMBERS_WORLD_POLICY);
 		}
 		if (!transportExecutors.isEmpty())
 		{
@@ -105,6 +123,26 @@ public final class Rs2PlannerShadowContext
 		if (itemGatedTransport)
 		{
 			coverage.add(Coverage.SELECTS_ITEM_GATED_TRANSPORT);
+		}
+		if (membersTransport)
+		{
+			coverage.add(Coverage.SELECTS_MEMBERS_TRANSPORT);
+		}
+		if (skillGatedTransport)
+		{
+			coverage.add(Coverage.SELECTS_SKILL_GATED_TRANSPORT);
+		}
+		if (questGatedTransport)
+		{
+			coverage.add(Coverage.SELECTS_QUEST_GATED_TRANSPORT);
+		}
+		if (stateGatedTransport)
+		{
+			coverage.add(Coverage.SELECTS_STATE_GATED_TRANSPORT);
+		}
+		if (skillGatedTransport || questGatedTransport || stateGatedTransport)
+		{
+			coverage.add(Coverage.SELECTS_NON_ITEM_REQUIREMENT_GATED_TRANSPORT);
 		}
 		if (policy.isUseBankItems())
 		{

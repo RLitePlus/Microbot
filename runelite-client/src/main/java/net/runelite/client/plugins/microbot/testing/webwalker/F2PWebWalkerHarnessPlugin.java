@@ -220,6 +220,7 @@ public class F2PWebWalkerHarnessPlugin extends Plugin {
         outcome.repetitions = route.repetitions;
         outcome.currentLocationStart = route.currentLocationStart;
         outcome.requireF2PWorld = route.requireF2PWorld;
+        outcome.requireMembersWorld = route.requireMembersWorld;
         outcome.forceNoAgilityShortcuts = route.forceNoAgilityShortcuts;
         outcome.forceNoTeleports = route.forceNoTeleports;
         outcome.forceCanoes = route.forceCanoes;
@@ -257,6 +258,14 @@ public class F2PWebWalkerHarnessPlugin extends Plugin {
         if (route.requireF2PWorld && membersWorld) {
             outcome.setupPassed = false;
             outcome.setupError = "Route " + route.id + " requires a F2P world, but the client is on a members world";
+            outcome.error = outcome.setupError;
+            outcome.finishedAt = Instant.now().toString();
+            return outcome;
+        }
+        if (route.requireMembersWorld && !membersWorld) {
+            outcome.setupPassed = false;
+            outcome.setupError = "Route " + route.id
+                    + " requires a members world, but the client is on a free world";
             outcome.error = outcome.setupError;
             outcome.finishedAt = Instant.now().toString();
             return outcome;
@@ -735,6 +744,25 @@ public class F2PWebWalkerHarnessPlugin extends Plugin {
             config.put("useShips", true);
         }
 
+        if (route.requireMembersWorld) {
+            config.put("useBoats", false);
+            config.put("useFairyRings", false);
+            config.put("useGnomeGliders", false);
+            config.put("useMagicCarpets", false);
+            config.put("useMagicMushtrees", false);
+            config.put("useQuetzals", false);
+            config.put("useSpiritTrees", false);
+            config.put("useWildernessObelisks", false);
+            if (route.expectedShadowExecutor == Rs2TransportExecutor.TERMINAL_TRAVEL) {
+                config.put("useBoats", true);
+                config.put("useShips", true);
+            } else if (route.expectedShadowExecutor == Rs2TransportExecutor.GNOME_GLIDER) {
+                config.put("useGnomeGliders", true);
+            } else if (route.expectedShadowExecutor == Rs2TransportExecutor.SPIRIT_TREE) {
+                config.put("useSpiritTrees", true);
+            }
+        }
+
         if (config.isEmpty()) {
             return;
         }
@@ -833,6 +861,7 @@ public class F2PWebWalkerHarnessPlugin extends Plugin {
         public int successfulAttempts;
         public boolean currentLocationStart;
         public boolean requireF2PWorld;
+        public boolean requireMembersWorld;
         public boolean membersWorld;
         public boolean forceNoAgilityShortcuts;
         public boolean forceNoTeleports;

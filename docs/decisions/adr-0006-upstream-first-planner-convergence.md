@@ -68,12 +68,21 @@ fallback sunset.
   decision weighs correctness, runtime reliability, performance and maintenance cost through the same
   engine-neutral contract.
 - Passing the selection gate permits a controlled rollout; it does not remove the local core. The first
-  upstream-authoritative release is limited to F2P policy because that is the scope of the accepted live
-  evidence. Expanding selection to members policy requires a separate representative live-shadow slice for
+  upstream-selecting release is a match-gated canary limited to F2P policy because that is the scope of the
+  accepted live evidence. It is not yet an upstream-authoritative release: an otherwise valid upstream route
+  with a different cost or selected transport still falls back to local. Expanding selection to members policy
+  requires a separate representative live-shadow slice for
   members-only executor, requirement and network behavior. Every upstream-authoritative scope must retain a
   tested, release-independent local-planner fallback and dual-planner telemetry during staged rollout. Any
   confirmed upstream planner failure or unexplained semantic divergence on a request selected for execution
   triggers rollback to the local planner.
+- A later upstream-authoritative mode must not turn the local result into a permanent correctness oracle or
+  accept arbitrary differences. Before that mode exists, Microbot must define an engine-independent route
+  validity check and a digest-pinned reviewed-divergence policy. Only a route that satisfies the resolved
+  request and immutable planning snapshot, materializes exact executable transport identities and either
+  matches or has a reviewed divergence may be selected. Failure, invalid materialization or an unclassified
+  divergence retains local and trips the rollout rollback signal. Merely adding such a mode does not authorize
+  enabling it or changing the default.
 - The fallback has an explicit sunset instead of becoming permanent architecture. The local planner becomes
   eligible for removal only after every supported rollout scope has used upstream authoritatively for at
   least two completed releases and has accumulated at least 1,000 settled production dual-planner

@@ -36,11 +36,15 @@ public class Rs2PlannerShadowContextTest
 			1,
 			false,
 			false,
-			false,
+			true,
 			0,
 			"Coins",
 			30,
-			Collections.emptyList());
+			Collections.emptyList(),
+			true,
+			true,
+			true,
+			null);
 		Rs2RouteResult result = new Rs2RouteResult(
 			start,
 			Set.of(target),
@@ -63,7 +67,19 @@ public class Rs2PlannerShadowContextTest
 		assertTrue(context.getCoverage().contains(
 			Rs2PlannerShadowContext.Coverage.USES_TRANSPORT));
 		assertTrue(context.getCoverage().contains(
+			Rs2PlannerShadowContext.Coverage.MEMBERS_WORLD_POLICY));
+		assertTrue(context.getCoverage().contains(
+			Rs2PlannerShadowContext.Coverage.SELECTS_MEMBERS_TRANSPORT));
+		assertTrue(context.getCoverage().contains(
 			Rs2PlannerShadowContext.Coverage.SELECTS_ITEM_GATED_TRANSPORT));
+		assertTrue(context.getCoverage().contains(
+			Rs2PlannerShadowContext.Coverage.SELECTS_SKILL_GATED_TRANSPORT));
+		assertTrue(context.getCoverage().contains(
+			Rs2PlannerShadowContext.Coverage.SELECTS_QUEST_GATED_TRANSPORT));
+		assertTrue(context.getCoverage().contains(
+			Rs2PlannerShadowContext.Coverage.SELECTS_STATE_GATED_TRANSPORT));
+		assertTrue(context.getCoverage().contains(
+			Rs2PlannerShadowContext.Coverage.SELECTS_NON_ITEM_REQUIREMENT_GATED_TRANSPORT));
 		assertTrue(context.getCoverage().contains(
 			Rs2PlannerShadowContext.Coverage.BANK_ITEMS_ENABLED));
 		assertTrue(context.getCoverage().contains(
@@ -78,6 +94,38 @@ public class Rs2PlannerShadowContextTest
 		assertEquals(Set.of(Rs2TransportType.TRANSPORT), context.getTransportTypes());
 		assertFalse(context.getCoverage().contains(
 			Rs2PlannerShadowContext.Coverage.SURFACE_COORDINATES_ONLY));
+	}
+
+	@Test
+	public void f2pWalkingRouteDoesNotClaimMembersOrRequirementEvidence()
+	{
+		WorldPoint start = new WorldPoint(3222, 3218, 0);
+		WorldPoint target = new WorldPoint(3223, 3218, 0);
+		Rs2RouteRequest request = Rs2RouteRequest.to(start, target)
+			.withPolicy(policy(false, false, false));
+		Rs2RouteResult result = new Rs2RouteResult(
+			start,
+			Set.of(target),
+			List.of(start, target),
+			List.of(Rs2RouteStep.walk(start, target)),
+			Rs2RouteTermination.TARGET_REACHED,
+			new Rs2RouteMetrics(10L, 1L, 2L, 0L));
+
+		Rs2PlannerShadowContext context = Rs2PlannerShadowContext.from(
+			Rs2PlannerShadowContext.Invocation.ACTIVE_ROUTE, false, request, result);
+
+		assertFalse(context.getCoverage().contains(
+			Rs2PlannerShadowContext.Coverage.MEMBERS_WORLD_POLICY));
+		assertFalse(context.getCoverage().contains(
+			Rs2PlannerShadowContext.Coverage.SELECTS_MEMBERS_TRANSPORT));
+		assertFalse(context.getCoverage().contains(
+			Rs2PlannerShadowContext.Coverage.SELECTS_SKILL_GATED_TRANSPORT));
+		assertFalse(context.getCoverage().contains(
+			Rs2PlannerShadowContext.Coverage.SELECTS_QUEST_GATED_TRANSPORT));
+		assertFalse(context.getCoverage().contains(
+			Rs2PlannerShadowContext.Coverage.SELECTS_STATE_GATED_TRANSPORT));
+		assertFalse(context.getCoverage().contains(
+			Rs2PlannerShadowContext.Coverage.SELECTS_NON_ITEM_REQUIREMENT_GATED_TRANSPORT));
 	}
 
 	@Test(expected = UnsupportedOperationException.class)
@@ -142,13 +190,19 @@ public class Rs2PlannerShadowContextTest
 
 	private static Rs2RoutePolicy policy(boolean bankItems, boolean liveCollision)
 	{
+		return policy(bankItems, liveCollision, true);
+	}
+
+	private static Rs2RoutePolicy policy(
+		boolean bankItems, boolean liveCollision, boolean membersWorld)
+	{
 		return new Rs2RoutePolicy(
 			bankItems,
 			true,
 			false,
 			false,
 			false,
-			true,
+			membersWorld,
 			liveCollision,
 			10_000L,
 			0,

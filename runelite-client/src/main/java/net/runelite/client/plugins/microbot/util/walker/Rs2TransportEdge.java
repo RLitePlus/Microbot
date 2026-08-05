@@ -22,6 +22,9 @@ public final class Rs2TransportEdge
 	private final boolean teleport;
 	private final boolean consumable;
 	private final boolean members;
+	private final boolean skillGated;
+	private final boolean questGated;
+	private final boolean stateGated;
 	private final int maxWildernessLevel;
 	private final String currencyName;
 	private final int currencyAmount;
@@ -50,7 +53,7 @@ public final class Rs2TransportEdge
 	{
 		this(origin, destination, type, executor, terminalTravelMode, displayInfo, action, target,
 			objectId, duration, teleport, consumable, members, maxWildernessLevel, currencyName,
-			currencyAmount, itemRequirements, null);
+			currencyAmount, itemRequirements, false, false, false, null);
 	}
 
 	Rs2TransportEdge(
@@ -71,6 +74,9 @@ public final class Rs2TransportEdge
 		String currencyName,
 		int currencyAmount,
 		List<Rs2TransportItemRequirement> itemRequirements,
+		boolean skillGated,
+		boolean questGated,
+		boolean stateGated,
 		Object sourceIdentity)
 	{
 		this.origin = origin;
@@ -91,6 +97,9 @@ public final class Rs2TransportEdge
 		this.teleport = teleport;
 		this.consumable = consumable;
 		this.members = members;
+		this.skillGated = skillGated;
+		this.questGated = questGated;
+		this.stateGated = stateGated;
 		this.maxWildernessLevel = maxWildernessLevel;
 		this.currencyName = currencyName == null ? "" : currencyName;
 		this.currencyAmount = currencyAmount;
@@ -113,6 +122,9 @@ public final class Rs2TransportEdge
 	public boolean isTeleport() { return teleport; }
 	public boolean isConsumable() { return consumable; }
 	public boolean isMembers() { return members; }
+	public boolean isSkillGated() { return skillGated; }
+	public boolean isQuestGated() { return questGated; }
+	public boolean isStateGated() { return stateGated; }
 	public int getMaxWildernessLevel() { return maxWildernessLevel; }
 	public String getCurrencyName() { return currencyName; }
 	public int getCurrencyAmount() { return currencyAmount; }

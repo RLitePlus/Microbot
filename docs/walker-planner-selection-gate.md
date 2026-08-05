@@ -36,7 +36,7 @@ A production-core decision requires all of these gates:
    shadow mode or reviewing two self-reported harness checks independently. The paired artifact must also
    contain complete canary-readiness timing: route submission through both searches, comparison,
    selection/fallback and upstream materialization.
-6. **Evidence-scoped rollout:** accepted F2P evidence permits only an F2P-policy upstream-authoritative
+6. **Evidence-scoped rollout:** accepted F2P evidence permits only a match-gated F2P upstream-selecting
    rollout. Selecting upstream for members policy requires a separate representative members-world slice
    covering members-only executors, requirements and transport networks.
 
@@ -45,8 +45,8 @@ synchronous, ordinary active and
 cave routes. Its coordinate-free coverage counters, read-only Agent Server endpoint and opt-in F2P harness
 capture produced an accepted 12-session aggregate covering recovery, transport, item-gated, bank-workflow,
 surface, underground, walking-only, live-collision, active-route/replan, arrival and executor-diversity
-minimums without a semantic divergence or planner failure. Five clean samples from the reachable review
-revision pass gate 3 with a `0.421` upstream/local comparable-suite median ratio and no correctness, absolute
+minimums without a semantic divergence or planner failure. Five clean samples from the exact evaluated
+revision pass gate 3 with a `0.407` upstream/local comparable-suite median ratio and no correctness, absolute
 or per-case threshold failure.
 The explicit `UPSTREAM_F2P_CANARY` selector now keeps members policy local, waits for both F2P candidates
 before atomically publishing an active route, selects upstream only on a semantic match and records distinct
@@ -57,6 +57,11 @@ normal readiness averaged `304.3 ms`, peaked at `645.7 ms` and averaged `172.0 m
 forced rollback averaged `260.8 ms`, peaked at `675.1 ms` and averaged `123.4 ms` of non-search overhead.
 Production default/release selection remains an explicit release decision; passing these gates does not change
 `LOCAL` automatically.
+
+The sanitized source snapshots and generated reports are tracked under
+`docs/evidence/walker/2026-08-05/`. The tracked inputs reproduce the accepted live-shadow and paired rollback
+reports byte-for-byte with the commands in that directory's README. Raw client logs, coordinates and account
+or profile data are intentionally excluded.
 
 ## Performance protocol
 
@@ -186,12 +191,35 @@ upstream route. A planner failure or semantic divergence retains local and incre
 counter; members requests remain local and are not canary comparisons. A route-shape-only difference remains
 a semantic match when termination, endpoint, cost and exact selected transports agree.
 
-The first upstream-authoritative release is F2P-policy only. Comparison remains enabled for eligible
-production requests, with `LOCAL` selectable independently of the upstream source set. Local fallback is
+The first upstream-selecting release is the F2P match-gated canary. Comparison remains enabled for eligible
+production requests, with `LOCAL` selectable independently of the upstream source set. This canary is not yet
+an upstream-authoritative mode: a different route cost or selected transport remains a divergence and retains
+local, even when the upstream result might be a genuine improvement. Local fallback is
 conservative containment, not evidence that local is the correct oracle; every divergence still requires
 review and remains rejecting release evidence. The upstream result is temporarily materialized into the
 legacy completed-pathfinder view for existing runtime consumers. Remove that compatibility shell with the
 local core when the fallback sunset is reached.
+
+### Post-canary authority contract
+
+Do not implement an authority mode as "select upstream unless it throws." Before an `UPSTREAM_F2P` mode can
+be enabled, all of the following must be implemented and tested:
+
+1. An engine-independent validator must prove that the candidate belongs to the resolved request and immutable
+   planning snapshot, has a coherent termination and endpoint, has contiguous route steps, and uses only exact
+   admitted transport identities with an executable Microbot owner.
+2. A digest-pinned reviewed-divergence policy must distinguish an approved improvement from an unexplained
+   semantic difference. Approval requires a route-property regression and representative live execution for
+   every newly admitted divergence class; a broad "shorter is safe" rule is insufficient.
+3. Failure, invalid materialization, an invalid candidate or an unclassified divergence must execute the local
+   result for the current request and emit a release-visible rollback signal. Selection and fallback counters
+   must distinguish match-gated canary decisions from authoritative reviewed-divergence decisions.
+4. Dual-planner telemetry and the release-independent `LOCAL` control remain enabled throughout the staged
+   authority period. Adding the enum/config value does not authorize changing the default.
+
+Only releases in which the authority mode can select a reviewed valid divergence count as
+"upstream-authoritative" for the two-release/1,000-comparison fallback sunset. Match-gated canary releases do
+not start that clock.
 
 The vendored delta is also bounded: six upstream files may be patched and one adapter-only source may be
 added. `scripts/check-shortest-path-vendored-core.py` rejects a larger surface. Raising the budget requires a
@@ -212,10 +240,11 @@ diagnostic; a failure exposes only the exception class, never its message or rou
 
 ## Current signal
 
-Five clean samples from the reachable review revision pass the performance evaluator with no correctness or
-threshold failure. The comparable-suite median is `1,548.6 ms` locally and `652.6 ms` upstream, an
-upstream/local ratio of `0.421` against the `1.5` limit. Every comparable case also passes its absolute and
-relative maximum. The reports are under `build/shortest-path-performance/final-fcba7a/`.
+Five clean samples from the exact evaluated revision pass the performance evaluator with no correctness or
+threshold failure. The comparable-suite median is `1,365.3 ms` locally and `555.2 ms` upstream, an
+upstream/local ratio of `0.407` against the `1.5` limit. Every comparable case also passes its absolute and
+relative maximum. The durable aggregate is
+`docs/evidence/walker/2026-08-05/performance-evidence.json`.
 
 Twelve independently validated fresh sessions aggregate to 141/141 semantic matches, 71/71 exact walker
 arrivals and zero divergence, planner failure, pending, discarded, unreachable or exit outcomes. All live
