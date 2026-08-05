@@ -386,7 +386,8 @@ public final class Rs2PathApi
 	 *
 	 * <p>The cave preference preserves the existing walker policy: calculate both the normal route and
 	 * a walking-only route, then prefer walking when it reaches any requested target and is not longer.
-	 * Non-cave planning remains asynchronous on the owned single-thread executor.</p>
+	 * Refresh and search always run asynchronously on the owned single-thread executor. The lifecycle
+	 * mutex is held only while publishing or replacing route state, never while doing planner work.</p>
 	 */
 	public static boolean restartActiveRoute(
 		Rs2RouteRequest request, boolean preferWalkingOnly, int reachedDistance)
@@ -430,86 +431,6 @@ public final class Rs2PathApi
 		synchronized (getPathfinderMutex())
 		{
 			cancelAndClearActiveRouteLocked();
-			if (shouldRefresh(request, config))
-			{
-				config.refresh(request.getRefreshTarget());
-			}
-
-			if (preferWalkingOnly)
-			{
-				PlannerSelectionMode plannerMode = config.getPlannerSelectionMode();
-				boolean comparisonEnabled = plannerMode.comparisonEnabled();
-				Rs2RouteRequest normalRequest = comparisonEnabled
-					? resolvePolicy(request, config) : null;
-				Rs2PlanningSnapshot normalSnapshot = comparisonEnabled
-					? resolvePlanningSnapshot(normalRequest, config) : null;
-				long canaryPlanningStarted = System.nanoTime();
-				Pathfinder normal = runLocalPlanner(config, request);
-				Pathfinder walkingOnly;
-				Rs2RouteRequest walkingRequest = null;
-				Rs2PlanningSnapshot walkingSnapshot = null;
-				try
-				{
-					config.setIgnoreTeleportAndItems(true);
-					if (comparisonEnabled)
-					{
-						walkingRequest = resolvePolicy(request, config);
-						walkingSnapshot = resolvePlanningSnapshot(walkingRequest, config);
-					}
-					walkingOnly = runLocalPlanner(config, request);
-				}
-				finally
-				{
-					config.setIgnoreTeleportAndItems(false);
-				}
-				Pathfinder selected = selectCaveRoute(
-					normal, walkingOnly, request.getTargets(), reachedDistance);
-				setPathfinder(selected);
-				boolean walkingSelected = selected == walkingOnly;
-				Rs2RouteRequest selectedRequest = walkingSelected ? walkingRequest : normalRequest;
-				Rs2PlanningSnapshot selectedSnapshot = walkingSelected ? walkingSnapshot : normalSnapshot;
-				activeRouteComparisonEligible = plannerMode == PlannerSelectionMode.SHADOW
-					|| isF2pCanary(plannerMode, selectedRequest);
-				if (isF2pCanary(plannerMode, selectedRequest))
-				{
-					Rs2RouteResult local = snapshot(selected, activeSearchNanos(selected));
-					PlannerEvaluation evaluation = evaluateUpstream(
-						selectedRequest, selectedSnapshot, local, invocation, walkingSelected);
-					Pathfinder materialized = null;
-					if (shouldSelectUpstream(evaluation.comparison))
-					{
-						try
-						{
-							materialized = materializeUpstreamRoute(
-								evaluation.candidate, config);
-						}
-						catch (RuntimeException failure)
-						{
-							evaluation = evaluation.materializationFailed(failure);
-						}
-					}
-					if (materialized != null)
-					{
-						replaceActivePathfinderLocked(selected, materialized);
-					}
-					recordPlannerComparison(evaluation);
-					recordCanaryOutcome(
-						evaluation.comparison,
-						elapsedNanos(canaryPlanningStarted),
-						combinedSearchNanos(normal, walkingOnly));
-				}
-				else if (plannerMode == PlannerSelectionMode.SHADOW)
-				{
-					submitUpstreamShadow(
-						selectedRequest,
-						selectedSnapshot,
-						snapshot(selected, activeSearchNanos(selected)),
-						invocation,
-						walkingSelected);
-				}
-				return true;
-			}
-
 			ExecutorService executor = getPathfindingExecutor();
 			if (executor == null || executor.isShutdown())
 			{
@@ -519,21 +440,71 @@ public final class Rs2PathApi
 				executor = Executors.newSingleThreadExecutor(threadFactory);
 				setPathfindingExecutor(executor);
 			}
-			PlannerSelectionMode plannerMode = config.getPlannerSelectionMode();
-			boolean comparisonEnabled = plannerMode.comparisonEnabled();
-			Rs2RouteRequest comparisonRequest = comparisonEnabled
-				? resolvePolicy(request, config) : null;
-			Rs2PlanningSnapshot comparisonSnapshot = comparisonEnabled
-				? resolvePlanningSnapshot(comparisonRequest, config) : null;
+
+			// Publish a lightweight calculating state immediately. The worker either runs this
+			// pathfinder (ordinary route) or replaces it atomically with the selected cave candidate.
 			Pathfinder active = new Pathfinder(config, request.getStart(), request.getTargets());
 			setPathfinder(active);
-			activeRouteComparisonEligible = plannerMode == PlannerSelectionMode.SHADOW
-				|| isF2pCanary(plannerMode, comparisonRequest);
+			activeRouteComparisonEligible = false;
 			long routeGeneration = activeRouteGeneration.get();
-			long canaryPlanningStarted = System.nanoTime();
-			setPathfinderFuture(executor.submit(() ->
+			setPathfinderFuture(executor.submit(() -> runActiveRoutePlanning(
+				active,
+				routeGeneration,
+				request,
+				preferWalkingOnly,
+				reachedDistance,
+				invocation,
+				config)));
+			return true;
+		}
+	}
+
+	private static void runActiveRoutePlanning(
+		Pathfinder active,
+		long routeGeneration,
+		Rs2RouteRequest request,
+		boolean preferWalkingOnly,
+		int reachedDistance,
+		Rs2PlannerShadowContext.Invocation invocation,
+		PathfinderConfig config)
+	{
+		try
+		{
+			// The shared configuration contains mutable transport snapshots and the temporary cave
+			// walking-only flag. Serialize planner work on the configuration itself, independently of
+			// the lifecycle mutex read by overlays and walker polling.
+			synchronized (config)
 			{
+				if (!isCurrentActiveRoute(active, routeGeneration))
+				{
+					return;
+				}
+				if (shouldRefresh(request, config))
+				{
+					config.refresh(request.getRefreshTarget());
+				}
+				if (!isCurrentActiveRoute(active, routeGeneration))
+				{
+					return;
+				}
+
+				if (preferWalkingOnly)
+				{
+					runActiveCavePlanning(
+						active, routeGeneration, request, reachedDistance, invocation, config);
+					return;
+				}
+
+				PlannerSelectionMode plannerMode = config.getPlannerSelectionMode();
+				boolean comparisonEnabled = plannerMode.comparisonEnabled();
+				Rs2RouteRequest comparisonRequest = comparisonEnabled
+					? resolvePolicy(request, config) : null;
+				Rs2PlanningSnapshot comparisonSnapshot = comparisonEnabled
+					? resolvePlanningSnapshot(comparisonRequest, config) : null;
+				long canaryPlanningStarted = System.nanoTime();
 				active.run();
+				publishComparisonEligibility(
+					active, routeGeneration, plannerMode, comparisonRequest);
 				if (!comparisonEnabled)
 				{
 					return;
@@ -545,26 +516,190 @@ public final class Rs2PathApi
 						config, invocation, canaryPlanningStarted);
 					return;
 				}
-				if (plannerMode != PlannerSelectionMode.SHADOW)
+				if (plannerMode == PlannerSelectionMode.SHADOW)
 				{
-					return;
+					submitActiveShadowIfCurrent(
+						active, routeGeneration, comparisonRequest, comparisonSnapshot,
+						invocation, false);
 				}
-				synchronized (getPathfinderMutex())
+			}
+		}
+		catch (RuntimeException failure)
+		{
+			WebWalkLog.spWarn("planner_task_failed | type={}", failure.getClass().getSimpleName());
+			publishFailedActiveRoute(active, routeGeneration, request, config);
+		}
+	}
+
+	private static void runActiveCavePlanning(
+		Pathfinder active,
+		long routeGeneration,
+		Rs2RouteRequest request,
+		int reachedDistance,
+		Rs2PlannerShadowContext.Invocation invocation,
+		PathfinderConfig config)
+	{
+		PlannerSelectionMode plannerMode = config.getPlannerSelectionMode();
+		boolean comparisonEnabled = plannerMode.comparisonEnabled();
+		Rs2RouteRequest normalRequest = comparisonEnabled
+			? resolvePolicy(request, config) : null;
+		Rs2PlanningSnapshot normalSnapshot = comparisonEnabled
+			? resolvePlanningSnapshot(normalRequest, config) : null;
+		long canaryPlanningStarted = System.nanoTime();
+		active.run();
+
+		Pathfinder walkingOnly;
+		Rs2RouteRequest walkingRequest = null;
+		Rs2PlanningSnapshot walkingSnapshot = null;
+		try
+		{
+			config.setIgnoreTeleportAndItems(true);
+			if (comparisonEnabled)
+			{
+				walkingRequest = resolvePolicy(request, config);
+				walkingSnapshot = resolvePlanningSnapshot(walkingRequest, config);
+			}
+			walkingOnly = runLocalPlanner(config, request);
+		}
+		finally
+		{
+			config.setIgnoreTeleportAndItems(false);
+		}
+
+		Pathfinder selected = selectCaveRoute(
+			active, walkingOnly, request.getTargets(), reachedDistance);
+		boolean walkingSelected = selected == walkingOnly;
+		Rs2RouteRequest selectedRequest = walkingSelected ? walkingRequest : normalRequest;
+		Rs2PlanningSnapshot selectedSnapshot = walkingSelected ? walkingSnapshot : normalSnapshot;
+		PlannerEvaluation evaluation = null;
+		Pathfinder materialized = null;
+		if (isF2pCanary(plannerMode, selectedRequest))
+		{
+			Rs2RouteResult local = snapshot(selected, activeSearchNanos(selected));
+			evaluation = evaluateUpstream(
+				selectedRequest, selectedSnapshot, local, invocation, walkingSelected);
+			if (shouldSelectUpstream(evaluation.comparison))
+			{
+				try
 				{
-					if (getPathfinder() != active
-						|| activeRouteGeneration.get() != routeGeneration)
-					{
-						return;
-					}
-					submitUpstreamShadow(
-						comparisonRequest,
-						comparisonSnapshot,
-						snapshot(active, activeSearchNanos(active)),
-						invocation,
-						false);
+					materialized = materializeUpstreamRoute(evaluation.candidate, config);
 				}
-			}));
-			return true;
+				catch (RuntimeException failure)
+				{
+					evaluation = evaluation.materializationFailed(failure);
+				}
+			}
+		}
+
+		synchronized (getPathfinderMutex())
+		{
+			if (getPathfinder() != active || activeRouteGeneration.get() != routeGeneration)
+			{
+				if (evaluation != null)
+				{
+					recordPlannerComparison(evaluation);
+				}
+				return;
+			}
+			Pathfinder published = materialized != null ? materialized : selected;
+			if (published != active)
+			{
+				replaceActivePathfinderLocked(active, published);
+			}
+			activeRouteComparisonEligible = plannerMode == PlannerSelectionMode.SHADOW
+				|| isF2pCanary(plannerMode, selectedRequest);
+			if (evaluation != null)
+			{
+				recordPlannerComparison(evaluation);
+				recordCanaryOutcome(
+					evaluation.comparison,
+					elapsedNanos(canaryPlanningStarted),
+					combinedSearchNanos(active, walkingOnly));
+			}
+			else if (plannerMode == PlannerSelectionMode.SHADOW)
+			{
+				submitUpstreamShadow(
+					selectedRequest,
+					selectedSnapshot,
+					snapshot(selected, activeSearchNanos(selected)),
+					invocation,
+					walkingSelected);
+			}
+		}
+	}
+
+	private static boolean isCurrentActiveRoute(Pathfinder active, long routeGeneration)
+	{
+		synchronized (getPathfinderMutex())
+		{
+			return getPathfinder() == active && activeRouteGeneration.get() == routeGeneration;
+		}
+	}
+
+	private static void publishComparisonEligibility(
+		Pathfinder active,
+		long routeGeneration,
+		PlannerSelectionMode plannerMode,
+		Rs2RouteRequest request)
+	{
+		synchronized (getPathfinderMutex())
+		{
+			if (getPathfinder() == active && activeRouteGeneration.get() == routeGeneration)
+			{
+				activeRouteComparisonEligible = plannerMode == PlannerSelectionMode.SHADOW
+					|| isF2pCanary(plannerMode, request);
+			}
+		}
+	}
+
+	private static void submitActiveShadowIfCurrent(
+		Pathfinder active,
+		long routeGeneration,
+		Rs2RouteRequest request,
+		Rs2PlanningSnapshot snapshot,
+		Rs2PlannerShadowContext.Invocation invocation,
+		boolean walkingOnlySelected)
+	{
+		synchronized (getPathfinderMutex())
+		{
+			if (getPathfinder() != active || activeRouteGeneration.get() != routeGeneration)
+			{
+				return;
+			}
+			submitUpstreamShadow(
+				request,
+				snapshot,
+				snapshot(active, activeSearchNanos(active)),
+				invocation,
+				walkingOnlySelected);
+		}
+	}
+
+	private static void publishFailedActiveRoute(
+		Pathfinder active,
+		long routeGeneration,
+		Rs2RouteRequest request,
+		PathfinderConfig config)
+	{
+		Pathfinder failed = Pathfinder.completedRoute(
+			config,
+			request.getStart(),
+			request.getTargets(),
+			List.of(request.getStart()),
+			Collections.emptyList(),
+			PathTerminationReason.FAILED,
+			Rs2RouteMetrics.UNAVAILABLE,
+			Rs2RouteMetrics.UNAVAILABLE,
+			Rs2RouteMetrics.UNAVAILABLE,
+			Rs2RouteMetrics.UNAVAILABLE,
+			Rs2RouteMetrics.UNAVAILABLE);
+		synchronized (getPathfinderMutex())
+		{
+			if (getPathfinder() == active && activeRouteGeneration.get() == routeGeneration)
+			{
+				replaceActivePathfinderLocked(active, failed);
+				activeRouteComparisonEligible = false;
+			}
 		}
 	}
 
@@ -670,9 +805,10 @@ public final class Rs2PathApi
 	 * Calculate a route without publishing it as the active walker pathfinder.
 	 *
 	 * <p>The shared configuration and its transport snapshots are mutable, so synchronous searches are
-	 * serialized with walker start/cancel transitions. A request-level bank-item policy is temporary and
-	 * always restored, including when refresh or pathfinding fails. This operation must run on a script or
-	 * worker thread because refresh and search are blocking.</p>
+	 * serialized with other planner work on the configuration monitor. The active-route lifecycle mutex is
+	 * deliberately not held while searching: client-thread overlays and route polling must remain responsive.
+	 * A request-level bank-item policy is temporary and always restored, including when refresh or pathfinding
+	 * fails. This operation must run on a script or worker thread because refresh and search are blocking.</p>
 	 */
 	public static Rs2RouteResult plan(Rs2RouteRequest request)
 	{
@@ -692,7 +828,7 @@ public final class Rs2PathApi
 			throw new IllegalStateException("shortest-path configuration is not initialized");
 		}
 
-		synchronized (getPathfinderMutex())
+		synchronized (config)
 		{
 			Boolean requestedBankItems = request.getUseBankItems();
 			boolean originalUseBankItems = config.isUseBankItems();
@@ -1720,7 +1856,7 @@ public final class Rs2PathApi
 		{
 			return false;
 		}
-		synchronized (getPathfinderMutex())
+		synchronized (config)
 		{
 			config.refresh(target);
 		}
@@ -1735,7 +1871,7 @@ public final class Rs2PathApi
 		{
 			return false;
 		}
-		synchronized (getPathfinderMutex())
+		synchronized (config)
 		{
 			config.invalidateTransportRefreshCache();
 		}
@@ -1750,7 +1886,7 @@ public final class Rs2PathApi
 		{
 			return false;
 		}
-		synchronized (getPathfinderMutex())
+		synchronized (config)
 		{
 			return config.learnBlockedEdge(origin, destination, reason);
 		}
@@ -1782,7 +1918,7 @@ public final class Rs2PathApi
 	/**
 	 * Whether {@code itemId} belongs to a currently known item-teleport requirement.
 	 *
-	 * <p>An empty catalog is refreshed under the lifecycle mutex before it is inspected. Additional
+	 * <p>An empty catalog is refreshed under the planner-configuration monitor before it is inspected. Additional
 	 * compatibility IDs cover items such as fairy-ring staves that are not ordinary teleport rows.</p>
 	 */
 	public static boolean isTeleportItem(int itemId, int... additionalItemIds)
@@ -1802,7 +1938,7 @@ public final class Rs2PathApi
 		{
 			return false;
 		}
-		synchronized (getPathfinderMutex())
+		synchronized (config)
 		{
 			if (config.getAllTransports().isEmpty())
 			{
@@ -1829,7 +1965,7 @@ public final class Rs2PathApi
 		{
 			return false;
 		}
-		synchronized (getPathfinderMutex())
+		synchronized (config)
 		{
 			config.setUseBankItems(false);
 			config.refresh(target);

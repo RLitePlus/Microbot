@@ -1,16 +1,24 @@
 package net.runelite.client.plugins.microbot.shortestpath;
 
 import net.runelite.api.GameState;
+import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.client.plugins.microbot.shortestpath.pathfinder.PathfinderConfig;
+import net.runelite.client.plugins.microbot.shortestpath.pathfinder.SplitFlagMap;
 import org.junit.After;
 import org.junit.Test;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -19,6 +27,8 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -248,7 +258,7 @@ public class ShortestPathTier1RegressionTest {
     }
 
     @Test
-    public void bug5_pendingRefreshConsumedExactlyOncePerLogin() {
+    public void bug5_pendingRefreshConsumedExactlyOncePerLogin() throws Exception {
         ShortestPathPlugin plugin = new ShortestPathPlugin();
         PathfinderConfig cfg = mock(PathfinderConfig.class);
         ShortestPathPlugin.pathfinderConfig = cfg;
@@ -257,6 +267,7 @@ public class ShortestPathTier1RegressionTest {
         plugin.handlePendingLoginRefresh();
         plugin.handlePendingLoginRefresh();
         plugin.handlePendingLoginRefresh();
+        awaitLoginRefresh(plugin);
 
         verify(cfg, times(1)).refresh();
         assertFalse(plugin.pendingLoginRefresh);
@@ -275,7 +286,7 @@ public class ShortestPathTier1RegressionTest {
     }
 
     @Test
-    public void bug5_refreshExceptionLeavesFlagSetForNextTickRetry() {
+    public void bug5_refreshExceptionLeavesFlagSetForNextTickRetry() throws Exception {
         ShortestPathPlugin plugin = new ShortestPathPlugin();
         PathfinderConfig cfg = mock(PathfinderConfig.class);
         org.mockito.Mockito.doThrow(new RuntimeException("boom")).when(cfg).refresh();
@@ -283,6 +294,7 @@ public class ShortestPathTier1RegressionTest {
         plugin.pendingLoginRefresh = true;
 
         plugin.handlePendingLoginRefresh();
+        awaitLoginRefresh(plugin);
 
         assertTrue("failing refresh keeps flag so handlePendingLoginRefresh retries after login/hydrate stabilizes",
                 plugin.pendingLoginRefresh);
@@ -290,21 +302,82 @@ public class ShortestPathTier1RegressionTest {
     }
 
     @Test
-    public void bug5_multipleLoginTransitionsEachRefreshOnce() {
+    public void bug5_multipleLoginTransitionsEachRefreshOnce() throws Exception {
         ShortestPathPlugin plugin = new ShortestPathPlugin();
         PathfinderConfig cfg = mock(PathfinderConfig.class);
         ShortestPathPlugin.pathfinderConfig = cfg;
 
         plugin.onGameStateChanged(gameStateEvent(GameState.LOGGED_IN));
         plugin.handlePendingLoginRefresh();
+        awaitLoginRefresh(plugin);
 
         plugin.onGameStateChanged(gameStateEvent(GameState.CONNECTION_LOST));
         plugin.handlePendingLoginRefresh();
 
         plugin.onGameStateChanged(gameStateEvent(GameState.LOGGED_IN));
         plugin.handlePendingLoginRefresh();
+        awaitLoginRefresh(plugin);
 
         verify(cfg, times(2)).refresh();
+    }
+
+    @Test
+    public void bug5_loginRefreshRunsOffTheCallingThread() throws Exception {
+        ShortestPathPlugin plugin = new ShortestPathPlugin();
+        PathfinderConfig cfg = mock(PathfinderConfig.class);
+        AtomicReference<Thread> refreshThread = new AtomicReference<>();
+        org.mockito.Mockito.doAnswer(invocation -> {
+            refreshThread.set(Thread.currentThread());
+            return null;
+        }).when(cfg).refresh();
+        ShortestPathPlugin.pathfinderConfig = cfg;
+
+        Thread caller = Thread.currentThread();
+        plugin.onGameStateChanged(gameStateEvent(GameState.LOGGED_IN));
+        plugin.handlePendingLoginRefresh();
+        awaitLoginRefresh(plugin);
+
+        assertNotNull(refreshThread.get());
+        assertFalse("post-login catalog refresh must never execute on the game/client caller",
+                caller == refreshThread.get());
+    }
+
+    @Test
+    public void worldMapPathSubmissionDoesNotRunRefreshOrSearchInline() throws Exception {
+        ShortestPathPlugin plugin = new ShortestPathPlugin();
+        PathfinderConfig cfg = spy(new PathfinderConfig(
+                SplitFlagMap.fromResources(), new HashMap<>(), Collections.emptyList(), null, null));
+        doNothing().when(cfg).refresh();
+        ShortestPathPlugin.pathfinderConfig = cfg;
+        ExecutorService originalExecutor = ShortestPathPlugin.pathfindingExecutor;
+        Future<?> originalFuture = ShortestPathPlugin.pathfinderFuture;
+        net.runelite.client.plugins.microbot.shortestpath.pathfinder.Pathfinder originalPathfinder =
+                ShortestPathPlugin.pathfinder;
+        ExecutorService worker = Executors.newSingleThreadExecutor();
+        try {
+            ShortestPathPlugin.pathfindingExecutor = worker;
+            long elapsedMillis;
+            synchronized (cfg) {
+                long started = System.nanoTime();
+                plugin.restartPathfinding(
+                        new WorldPoint(3222, 3218, 0),
+                        Set.of(new WorldPoint(3232, 3218, 0)),
+                        true);
+                elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
+                assertNotNull(ShortestPathPlugin.pathfinderFuture);
+                assertFalse("planner worker must be waiting on the test-held config monitor",
+                        ShortestPathPlugin.pathfinderFuture.isDone());
+            }
+            assertTrue("world-map path submission must return before refresh/search completes",
+                    elapsedMillis < 1_000L);
+            ShortestPathPlugin.pathfinderFuture.get(5, TimeUnit.SECONDS);
+            verify(cfg, times(1)).refresh();
+        } finally {
+            worker.shutdownNow();
+            ShortestPathPlugin.pathfinder = originalPathfinder;
+            ShortestPathPlugin.pathfinderFuture = originalFuture;
+            ShortestPathPlugin.pathfindingExecutor = originalExecutor;
+        }
     }
 
     @Test
@@ -323,6 +396,12 @@ public class ShortestPathTier1RegressionTest {
         GameStateChanged event = new GameStateChanged();
         event.setGameState(state);
         return event;
+    }
+
+    private static void awaitLoginRefresh(ShortestPathPlugin plugin) throws Exception {
+        Future<?> refresh = plugin.pendingLoginRefreshFuture;
+        assertNotNull("login refresh must publish its worker future", refresh);
+        refresh.get(5, TimeUnit.SECONDS);
     }
 
     /**

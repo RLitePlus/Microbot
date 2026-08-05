@@ -1,12 +1,15 @@
 package net.runelite.client.plugins.microbot.shortestpath.pathfinder;
 
 import net.runelite.api.coords.WorldPoint;
+import net.runelite.client.callback.ClientThread;
+import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.shortestpath.Transport;
 import net.runelite.client.plugins.microbot.shortestpath.TransportType;
 import net.runelite.client.plugins.microbot.shortestpath.WorldPointUtil;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -114,6 +117,34 @@ public class PathfinderTerminationReasonTest
 
 		assertEquals(PathTerminationReason.FAILED, pathfinder.getTerminationReason());
 		assertTrue("the worker stopped even though planning failed", pathfinder.isDone());
+	}
+
+	@Test
+	public void clientThreadSearchIsRejectedBeforeMapAccess() throws Exception
+	{
+		Field clientThreadField = Microbot.class.getDeclaredField("clientThread");
+		clientThreadField.setAccessible(true);
+		Object originalClientThread = clientThreadField.get(null);
+		ClientThread clientThread = mock(ClientThread.class);
+		when(clientThread.isClientThread()).thenReturn(true);
+		Scenario scenario = scenario(10_000L);
+		Pathfinder pathfinder = new Pathfinder(
+			scenario.config, START, Collections.singleton(TARGET));
+		try
+		{
+			clientThreadField.set(null, clientThread);
+
+			pathfinder.run();
+
+			assertEquals(PathTerminationReason.FAILED, pathfinder.getTerminationReason());
+			assertTrue(pathfinder.isDone());
+			assertTrue(pathfinder.getPath().isEmpty());
+			org.mockito.Mockito.verify(scenario.config, org.mockito.Mockito.never()).getMap();
+		}
+		finally
+		{
+			clientThreadField.set(null, originalClientThread);
+		}
 	}
 
 	@Test

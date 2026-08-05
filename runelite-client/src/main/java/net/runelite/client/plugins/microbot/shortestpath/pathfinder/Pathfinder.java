@@ -638,6 +638,19 @@ public class Pathfinder implements Runnable {
 
     @Override
     public void run() {
+        if (Microbot.getClientThread() != null && Microbot.getClientThread().isClientThread()) {
+            path = Collections.emptyList();
+            smoothedPath = Collections.emptyList();
+            joinedPath = null;
+            joinedPathEdges = null;
+            selectedPathCost = -1L;
+            terminationReason = PathTerminationReason.FAILED;
+            stats.start();
+            stats.end(0L);
+            done = true;
+            log.error("[Pathfinder] Refusing to run route search on the client thread");
+            return;
+        }
         WebWalkLog.pf("run_start src={} dst={} cutoffMs={}",
                 WorldPointUtil.toString(start), WorldPointUtil.toString(targets), config.getCalculationCutoffMillis());
         path = Collections.emptyList();

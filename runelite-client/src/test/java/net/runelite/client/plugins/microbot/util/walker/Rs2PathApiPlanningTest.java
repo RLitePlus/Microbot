@@ -850,14 +850,14 @@ public class Rs2PathApiPlanningTest
 					.withRefreshPolicy(Rs2RouteRequest.RefreshPolicy.NEVER),
 				false,
 				0));
-			assertTrue(Rs2PathApi.isActiveRouteComparisonEligible());
 			long routeGeneration = Rs2PathApi.getActiveRouteStatus().getGeneration();
-			assertTrue(Rs2PathApi.isActiveRouteComparisonEligible(routeGeneration));
 			// The canary runs the local and upstream planners sequentially. Each inherits the
 			// 10-second calculation cutoff, so the lifecycle bound must cover both under a busy suite.
 			Rs2PathApi.getPathfinderFuture().get(
 				ACTIVE_ROUTE_TEST_TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
+			assertTrue(Rs2PathApi.isActiveRouteComparisonEligible());
+			assertTrue(Rs2PathApi.isActiveRouteComparisonEligible(routeGeneration));
 			assertTrue(Rs2PathApi.getActiveRouteStatus().isReady());
 			assertEquals(target, Rs2PathApi.getActiveRoute()
 				.flatMap(Rs2RouteResult::getEndpoint).orElse(null));
@@ -918,10 +918,10 @@ public class Rs2PathApiPlanningTest
 					.withRefreshPolicy(Rs2RouteRequest.RefreshPolicy.NEVER),
 				false,
 				0));
-			assertTrue(Rs2PathApi.isActiveRouteComparisonEligible());
 			Rs2PathApi.getPathfinderFuture().get(
 				ACTIVE_ROUTE_TEST_TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
+			assertTrue(Rs2PathApi.isActiveRouteComparisonEligible());
 			assertTrue("the local rollback route must remain executable",
 				Rs2PathApi.getActiveRouteStatus().isReady());
 			assertEquals(target, Rs2PathApi.getActiveRoute()
@@ -960,16 +960,21 @@ public class Rs2PathApiPlanningTest
 		PathfinderConfig originalConfig = ShortestPathPlugin.pathfinderConfig;
 		Pathfinder originalPathfinder = Rs2PathApi.getPathfinder();
 		Future<?> originalFuture = Rs2PathApi.getPathfinderFuture();
+		ExecutorService originalExecutor = Rs2PathApi.getPathfindingExecutor();
+		ExecutorService activeExecutor = Executors.newSingleThreadExecutor();
 		Rs2PlannerShadowStats before = Rs2PathApi.getShadowStats();
 		try
 		{
 			ShortestPathPlugin.pathfinderConfig = activeConfig;
+			Rs2PathApi.setPathfindingExecutor(activeExecutor);
 			assertTrue(Rs2PathApi.restartActiveRoute(
 				Rs2RouteRequest.to(
 					new WorldPoint(3222, 3218, 0), new WorldPoint(3232, 3218, 0))
 					.withRefreshPolicy(Rs2RouteRequest.RefreshPolicy.NEVER),
 				true,
 				0));
+			Rs2PathApi.getPathfinderFuture().get(
+				ACTIVE_ROUTE_TEST_TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
 			Rs2PlannerShadowStats after = Rs2PathApi.getShadowStats();
 			Rs2PlannerShadowComparison comparison = Rs2PathApi.getLastShadowComparison()
@@ -983,10 +988,56 @@ public class Rs2PathApiPlanningTest
 		}
 		finally
 		{
+			activeExecutor.shutdownNow();
 			Rs2PathApi.setPathfinder(originalPathfinder);
 			Rs2PathApi.setPathfinderFuture(originalFuture);
+			Rs2PathApi.setPathfindingExecutor(originalExecutor);
 			ShortestPathPlugin.pathfinderConfig = originalConfig;
 			restoreProperty("microbot.test.walker.forceUpstreamPlannerFailure", originalFailure);
+		}
+	}
+
+	@Test
+	public void activeCavePlanningDoesNotBlockLifecycleReadersOrTheCaller() throws Exception
+	{
+		PathfinderConfig activeConfig = f2pConfig();
+		setPlannerMode(activeConfig, PlannerSelectionMode.LOCAL);
+		PathfinderConfig originalConfig = ShortestPathPlugin.pathfinderConfig;
+		Pathfinder originalPathfinder = Rs2PathApi.getPathfinder();
+		Future<?> originalFuture = Rs2PathApi.getPathfinderFuture();
+		ExecutorService originalExecutor = Rs2PathApi.getPathfindingExecutor();
+		ExecutorService activeExecutor = Executors.newSingleThreadExecutor();
+		try
+		{
+			ShortestPathPlugin.pathfinderConfig = activeConfig;
+			Rs2PathApi.setPathfindingExecutor(activeExecutor);
+			long elapsedMillis;
+			synchronized (activeConfig)
+			{
+				long started = System.nanoTime();
+				assertTrue(Rs2PathApi.restartActiveRoute(
+					Rs2RouteRequest.to(
+						new WorldPoint(3222, 3218, 0), new WorldPoint(3232, 3218, 0))
+						.withRefreshPolicy(Rs2RouteRequest.RefreshPolicy.NEVER),
+					true,
+					0));
+				assertTrue("the published placeholder must remain observable while planner work is blocked",
+					Rs2PathApi.getActiveRouteStatus().isCalculating());
+				elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
+			}
+			assertTrue("route submission and lifecycle reads must not wait for cave search",
+				elapsedMillis < 1_000L);
+			Rs2PathApi.getPathfinderFuture().get(
+				ACTIVE_ROUTE_TEST_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+			assertTrue(Rs2PathApi.getActiveRouteStatus().isReady());
+		}
+		finally
+		{
+			activeExecutor.shutdownNow();
+			Rs2PathApi.setPathfinder(originalPathfinder);
+			Rs2PathApi.setPathfinderFuture(originalFuture);
+			Rs2PathApi.setPathfindingExecutor(originalExecutor);
+			ShortestPathPlugin.pathfinderConfig = originalConfig;
 		}
 	}
 
