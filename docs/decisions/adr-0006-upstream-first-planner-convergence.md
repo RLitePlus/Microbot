@@ -1,7 +1,7 @@
 # ADR 0006: Establish an Upstream-Compatible Planner Boundary and Selection Gate
 
-- Status: Architecture accepted; opt-in F2P canary implemented and validated (2026-08-05);
-  default/release selection pending durable performance evidence
+- Status: Architecture and F2P evidence gates accepted (2026-08-05);
+  default/release selection pending explicit approval
 
 ## Context
 

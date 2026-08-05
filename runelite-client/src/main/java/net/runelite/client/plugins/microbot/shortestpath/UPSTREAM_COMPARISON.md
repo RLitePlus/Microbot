@@ -145,10 +145,9 @@ resource blobs are now recorded outside this narrative document so drift is mach
   comparisons. There is no semantic divergence, planner failure, pending/discarded work, unreachable result or
   exit. Seventy-six exact-shape differences are equal-cost alternatives with matching selected transports;
   retained diagnostics classify them across transport-free replan/recovery, bank/canoe and mixed surface
-  slices, with none in the underground comparisons and none associated with a non-arrival. Five clean
-  samples from an ephemeral detached revision containing the exact current tree also pass the
-  timing gate at a `0.392` upstream/local comparable-suite median ratio. Preserve or repeat that evidence on
-  the final reachable review revision. The explicit F2P selector and rollback test are now complete;
+  slices, with none in the underground comparisons and none associated with a non-arrival. Five clean samples
+  from the reachable review revision pass the timing gate at a `0.421` upstream/local comparable-suite median
+  ratio. The explicit F2P selector and rollback test are also complete;
   members-policy selection requires separate representative members-world evidence.
   `check-shortest-path-vendored-core.py` pins all source/metadata digests and can prove every undeclared file
   byte-identical to the reviewed checkout.
@@ -161,8 +160,8 @@ resource blobs are now recorded outside this narrative document so drift is mach
   Remove that shell with the local planner after the two-release/1,000-comparison fallback sunset. A live
   F2P-17 underground run made ten upstream selections and ten arrivals without divergence or failure. A
   separate test-only forced-failure run made zero upstream selections, ten local failure fallbacks and ten
-  arrivals. This validates the opt-in selector; the default remains local until the performance result is
-  tied to the final reachable review revision and the final evidence bundle is approved.
+  arrivals. This validates the opt-in selector; the default remains local until an F2P release is explicitly
+  approved.
 - Migrated active destination bank-item discovery to exact immutable `Rs2TransportEdge` values. Fare,
   rune, fairy-ring, purchasable-item and structured AND/OR requirement selection no longer require a
   concrete selected `Transport`; the transitional `LegacyRoutePlan` handoff is removed and CI prevents it
@@ -228,9 +227,9 @@ resource blobs are now recorded outside this narrative document so drift is mach
   the selected bank-to-target edges instead of running a second search from the pre-bank location. CI
   prohibits concrete transport imports from migrated packages and rejects that compare-then-replan pattern.
 
-Next work is to repeat or adopt the performance evidence under the final reachable review revision, approve
-the F2P-scoped release decision, and collect representative members-only evidence before any members-policy
-selection. Broad family-by-family transport convergence remains paused except for incident-driven fixes.
+Next work is to approve the F2P-scoped release decision and collect representative members-only evidence before
+any members-policy selection. Broad family-by-family transport convergence remains paused except for
+incident-driven fixes.
 Runtime interaction changes still require live harness evidence. Do not use the old priority list at the
 bottom of this historical document as the active queue.
 

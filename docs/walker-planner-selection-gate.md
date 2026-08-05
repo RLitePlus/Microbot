@@ -1,10 +1,11 @@
 # Walker planner selection gate
 
-## Production selection under review
+## F2P production selection evidence complete
 
-The upstream-compatible boundary is correct, but selecting either search core for long-term production is
-not yet justified. `Skretzo/shortest-path` provides the maintenance-preferred candidate algorithm and reviewed
-reference data; that preference does not override the correctness, runtime and performance evidence gates.
+The upstream-compatible boundary is correct, and the reviewed upstream core now satisfies the F2P-scoped
+correctness, runtime, rollback and performance evidence gates. `Skretzo/shortest-path` remains the
+maintenance-preferred candidate algorithm and reviewed reference data; members-policy selection is not
+justified until its separate evidence slice passes.
 Microbot's resolved planning snapshot remains authoritative for executable-edge admission, live collision,
 account policy and intentional data overlays. Microbot should continue to own banking orchestration,
 interaction, recovery and automation policy.
@@ -39,14 +40,14 @@ A production-core decision requires all of these gates:
    rollout. Selecting upstream for members policy requires a separate representative members-world slice
    covering members-only executors, requirements and transport networks.
 
-The current implementation satisfies gates 1, 2, 4, 5 and 6 at opt-in canary scope. Shadowing exists for
+The current implementation satisfies all six gates at opt-in F2P canary scope. Shadowing exists for
 synchronous, ordinary active and
 cave routes. Its coordinate-free coverage counters, read-only Agent Server endpoint and opt-in F2P harness
 capture produced an accepted 12-session aggregate covering recovery, transport, item-gated, bank-workflow,
 surface, underground, walking-only, live-collision, active-route/replan, arrival and executor-diversity
-minimums without a semantic divergence or planner failure. Five clean same-revision samples from an ephemeral
-detached commit containing the exact current tree pass gate 3's correctness and timing thresholds; the final
-review commit must reproduce or adopt that evidence under a durable revision identity.
+minimums without a semantic divergence or planner failure. Five clean samples from the reachable review
+revision pass gate 3 with a `0.421` upstream/local comparable-suite median ratio and no correctness, absolute
+or per-case threshold failure.
 The explicit `UPSTREAM_F2P_CANARY` selector now keeps members policy local, waits for both F2P candidates
 before atomically publishing an active route, selects upstream only on a semantic match and records distinct
 divergence/failure local fallbacks. A live underground object-transition run selected upstream 10/10 times
@@ -54,8 +55,8 @@ and arrived 10/10 times. A separate test-only forced-failure run selected upstre
 failure fallbacks and still arrived 10/10 times. A fresh pair with aggregate canary-readiness telemetry passes:
 normal readiness averaged `304.3 ms`, peaked at `645.7 ms` and averaged `172.0 ms` of non-search overhead;
 forced rollback averaged `260.8 ms`, peaked at `675.1 ms` and averaged `123.4 ms` of non-search overhead.
-Production default/release selection remains pending because the durable final-revision performance evidence
-is not yet complete.
+Production default/release selection remains an explicit release decision; passing these gates does not change
+`LOCAL` automatically.
 
 ## Performance protocol
 
@@ -211,13 +212,10 @@ diagnostic; a failure exposes only the exception class, never its message or rou
 
 ## Current signal
 
-Five clean samples from one detached revision containing the exact current tree pass the performance
-evaluator with no correctness or threshold failure. The comparable-suite median was about `1,334.8 ms`
-locally and `522.6 ms` upstream, an upstream/local ratio of `0.392` against the `1.5` limit. Every comparable
-case also passed its absolute and relative maximum. The reports are under
-`build/shortest-path-performance/current-tree-20260805/`; because their synthetic revision is deliberately
-not a branch commit, repeat or formally adopt them on the final reachable review revision before production
-selection.
+Five clean samples from the reachable review revision pass the performance evaluator with no correctness or
+threshold failure. The comparable-suite median is `1,548.6 ms` locally and `652.6 ms` upstream, an
+upstream/local ratio of `0.421` against the `1.5` limit. Every comparable case also passes its absolute and
+relative maximum. The reports are under `build/shortest-path-performance/final-fcba7a/`.
 
 Twelve independently validated fresh sessions aggregate to 141/141 semantic matches, 71/71 exact walker
 arrivals and zero divergence, planner failure, pending, discarded, unreachable or exit outcomes. All live
@@ -261,6 +259,6 @@ all 10 eligible arrivals; focused members-canary and local-mode regressions prov
 execution totals unchanged. The fresh paired release evaluator accepts the normal and forced-failure artifacts
 with complete submission-to-ready telemetry and no failure, shortfall or warning. The normal canary averaged
 `304.3 ms`, peaked at `645.7 ms` and averaged `172.0 ms` of non-search overhead; rollback averaged `260.8 ms`,
-peaked at `675.1 ms` and averaged `123.4 ms` of non-search overhead. `LOCAL` remains the default. Do not change
-the release default until the performance result is tied to the final reachable review revision and the final
-evidence bundle is approved.
+peaked at `675.1 ms` and averaged `123.4 ms` of non-search overhead. `LOCAL` remains the default. The evidence
+permits an explicitly approved F2P-scoped release; it does not permit members-policy selection or silently
+change the default.

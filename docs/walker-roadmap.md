@@ -327,7 +327,7 @@ collision updates continue through the same evidence boundary:
    Varrock Sewers sessions close the underground and walking-only live minimums, and the full 12-session
    aggregate closes every F2P live-shadow threshold. Members-policy selection still requires its own
    representative members-only executor, requirement and network evidence.
-5. **Selector and rollback complete; durable performance evidence pending:** planner selection is one explicit
+5. **Complete for an explicit F2P release decision:** planner selection is one explicit
    `LOCAL`, `SHADOW` or `UPSTREAM_F2P_CANARY` mode. `LOCAL` remains the default. The canary is eligible only
    for resolved non-members policy, waits for both candidates before atomically publishing the route, and
    selects upstream only on a semantic match. Divergence or planner failure retains local while recording a
@@ -342,12 +342,11 @@ collision updates continue through the same evidence boundary:
    route, accounting, selection, fallback, arrival, coverage, failure-opacity and submission-to-ready timing
    invariants all hold. A fresh readiness-aware pair is accepted without failures, shortfalls or warnings:
    normal readiness averaged `304.3 ms` and peaked at `645.7 ms`; forced rollback averaged `260.8 ms` and
-   peaked at `675.1 ms`, with average non-search overhead below the `250 ms` limit in both phases. Five
-   clean samples from an ephemeral detached revision
-   containing the exact current tree also pass every correctness and performance threshold (`0.392`
-   upstream/local comparable-suite median ratio). Repeat or formally adopt that report under the final
-   reachable review revision before changing the default or cutting the selection release. Members-policy
-   selection still requires representative members-only evidence.
+   peaked at `675.1 ms`, with average non-search overhead below the `250 ms` limit in both phases. Five clean
+   samples from the reachable review revision pass every correctness and performance threshold: the local
+   comparable-suite median is `1,548.6 ms`, upstream is `652.6 ms`, and the ratio is `0.421`. `LOCAL` remains
+   the default until a release explicitly selects the F2P canary. Members-policy selection still requires
+   representative members-only evidence.
 
 ### 1. Keep planner data current
 
