@@ -52,8 +52,8 @@ before atomically publishing an active route, selects upstream only on a semanti
 divergence/failure local fallbacks. A live underground object-transition run selected upstream 10/10 times
 and arrived 10/10 times. A separate test-only forced-failure run selected upstream 0/10 times, recorded ten
 failure fallbacks and still arrived 10/10 times. A fresh pair with aggregate canary-readiness telemetry passes:
-normal readiness averaged `268.3 ms`, peaked at `574.4 ms` and averaged `186.0 ms` of non-search overhead;
-forced rollback averaged `213.7 ms`, peaked at `332.7 ms` and averaged `134.1 ms` of non-search overhead.
+normal readiness averaged `304.3 ms`, peaked at `645.7 ms` and averaged `172.0 ms` of non-search overhead;
+forced rollback averaged `260.8 ms`, peaked at `675.1 ms` and averaged `123.4 ms` of non-search overhead.
 Production default/release selection remains pending because the durable final-revision performance evidence
 is not yet complete.
 
@@ -260,7 +260,7 @@ upstream selections. Both were repeated after terminal evidence became route-gen
 all 10 eligible arrivals; focused members-canary and local-mode regressions prove ineligible walks leave the
 execution totals unchanged. The fresh paired release evaluator accepts the normal and forced-failure artifacts
 with complete submission-to-ready telemetry and no failure, shortfall or warning. The normal canary averaged
-`268.3 ms`, peaked at `574.4 ms` and averaged `186.0 ms` of non-search overhead; rollback averaged `213.7 ms`,
-peaked at `332.7 ms` and averaged `134.1 ms` of non-search overhead. `LOCAL` remains the default. Do not change
+`304.3 ms`, peaked at `645.7 ms` and averaged `172.0 ms` of non-search overhead; rollback averaged `260.8 ms`,
+peaked at `675.1 ms` and averaged `123.4 ms` of non-search overhead. `LOCAL` remains the default. Do not change
 the release default until the performance result is tied to the final reachable review revision and the final
 evidence bundle is approved.
