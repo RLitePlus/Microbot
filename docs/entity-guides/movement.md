@@ -194,8 +194,8 @@ if (bothEndpointTilesReachable
     continue;
 }
 if (doorOpenedButPlayerDidNotTraverse) {
-    // Only count this as success if the nudge actually reaches/crosses the door edge.
-    tryDoorEdgeCrossNudge(from, to, currentTarget);
+    // Record the open edge, then let normal route selection choose the next click.
+    markStationaryDoorOpened(doorTile);
 }
 if (hasPendingDoorLikeSceneObjectBeforeDirectClick(rawPath, path, playerLoc, DIRECT_CLICK_MAX_DISTANCE)
         || handlePendingDoorBeforeRouteClick(rawPath, path, i, targetIdx, smoothedToRaw, timeoutMs,
@@ -295,3 +295,23 @@ Sticky interim targets should also clear when route-index progress goes stale. I
 When a route-following minimap click is outside the minimap clip, fallback clicks must stay on the raw path. A generic "reachable tile closer to target" fallback can select a tile far away from the route in open areas, especially near the final destination.
 
 For adjacent same-plane shortcuts, do not treat any movement away from the origin as success. Some shortcuts, such as stepping stones, can fail and place the player on a fallback tile; once the player is settled away from the expected destination, stop the landing wait and replan from the actual tile.
+
+## 14. Resume normal route selection after opening a door
+
+Opening a door should only resolve the blocked route edge. Do not follow it with a special canvas click on the adjacent far-side tile. Once the open edge is stable, yield the pass and let the normal route selector click the furthest reachable raw-path tile toward the destination.
+
+**Why this matters:** An explicit one-tile cross-door nudge produces a conspicuous `Open door -> Walk here on the next tile` sequence and can fail even though the newly opened route is already clear. The ordinary minimap route click both crosses the doorway and carries movement forward naturally.
+
+**Pattern to follow:**
+
+```java
+if (isDoorEdgeResolved(from, to)) {
+    markStationaryDoorOpened(doorTile);
+    markNearbyDoorFamilyOpened(door, doorTile, action, radius);
+}
+return true; // next pass selects the furthest reachable route tile
+```
+
+**Where this applies:** `Rs2Walker` door interaction handlers, recent-door recovery, and any post-door continuation logic.
+
+**Defensive check:** After an `Open` interaction, the next walk action should target a forward route checkpoint, not the door edge's adjacent destination tile.

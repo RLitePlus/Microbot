@@ -1628,24 +1628,6 @@ public class Rs2WalkerUnitTest {
     }
 
     @Test
-    public void isDoorEdgeNudgeResolved_movesToWrongNeighbor_returnsFalse() {
-        assertFalse(Rs2Walker.isDoorEdgeNudgeResolved(
-                new WorldPoint(3240, 3301, 0),
-                new WorldPoint(3239, 3302, 0),
-                new WorldPoint(3240, 3301, 0),
-                new WorldPoint(3241, 3302, 0)));
-    }
-
-    @Test
-    public void isDoorEdgeNudgeResolved_crossesToDoorTarget_returnsTrue() {
-        assertTrue(Rs2Walker.isDoorEdgeNudgeResolved(
-                new WorldPoint(3240, 3301, 0),
-                new WorldPoint(3241, 3302, 0),
-                new WorldPoint(3240, 3301, 0),
-                new WorldPoint(3241, 3302, 0)));
-    }
-
-    @Test
     public void shouldClearInterimTarget_closeToCheckpoint_returnsTrue() {
         assertTrue(Rs2Walker.shouldClearInterimTarget(
                 new WorldPoint(2890, 3396, 0),

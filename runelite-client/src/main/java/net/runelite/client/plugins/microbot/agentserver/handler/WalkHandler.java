@@ -117,6 +117,7 @@ public class WalkHandler extends AgentHandler {
 				if (walkFuture.isDone()) {
 					state = walkFuture.get();
 					timedOut = false;
+					completeActiveWalk(walkFuture, "agent-server:walk-completed-" + state.name());
 					break;
 				}
 
@@ -126,7 +127,7 @@ public class WalkHandler extends AgentHandler {
 					arrivedByPosition = true;
 					timedOut = false;
 					walkFuture.cancel(true);
-					clearActiveWalk(walkFuture);
+					completeActiveWalk(walkFuture, "agent-server:arrived-by-position");
 					break;
 				}
 
@@ -187,7 +188,7 @@ public class WalkHandler extends AgentHandler {
 		}
 		if (activeWalk != null && !activeWalk.isDone()) {
 			activeWalk.cancel(true);
-			Rs2Walker.setTarget(null);
+			Rs2Walker.clearWalkingRoute("agent-server:walk-replaced");
 		}
 		activeWalkTarget = destination;
 		activeWalkReachedDistance = reachedDistance;
@@ -195,8 +196,15 @@ public class WalkHandler extends AgentHandler {
 		return activeWalk;
 	}
 
-	private static synchronized void clearActiveWalk(Future<WalkerState> walkFuture) {
+	/**
+	 * Clears both the request bookkeeping and the route rendered by Shortest Path.
+	 *
+	 * <p>The identity check matters when overlapping HTTP requests replace a walk: a late
+	 * completion from the cancelled request must not clear the newer request's route.</p>
+	 */
+	private static synchronized void completeActiveWalk(Future<WalkerState> walkFuture, String reason) {
 		if (activeWalk == walkFuture) {
+			Rs2Walker.clearWalkingRoute(reason);
 			activeWalk = null;
 			activeWalkTarget = null;
 			activeWalkReachedDistance = DEFAULT_REACHED_DISTANCE;

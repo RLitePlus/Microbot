@@ -7,13 +7,14 @@ import net.runelite.client.plugins.microbot.util.tile.Rs2Tile;
 import net.runelite.client.plugins.microbot.util.walker.door.model.AwaitTicket;
 import net.runelite.client.plugins.microbot.util.walker.door.model.DoorResolution;
 import net.runelite.client.plugins.microbot.util.walker.WebWalkLog;
-import net.runelite.client.plugins.microbot.util.walker.shared.Rs2WalkerProgress;
 
 import static net.runelite.client.plugins.microbot.util.Global.sleepUntil;
 
 public final class Rs2WalkerAwaits {
     private static final int DOOR_INTERACTION_START_WAIT_MS = 700;
-    private static final int DOOR_TRAVERSAL_PROGRESS_WAIT_MS = 2200;
+    private static final int DOOR_TRAVERSAL_PROGRESS_WAIT_MS = 3500;
+    /** Keep an opened edge idle for one game tick before the next route-following click. */
+    private static final long DOOR_OPEN_STABLE_BEFORE_CROSS_MS = 600L;
     /** Stationary and not animating for longer than this, with the edge unresolved, means the click didn't land. */
     private static final long DOOR_IDLE_ACCEPT_MIN_MS = 1_200L;
     /** Above this combined wait, say which condition released the door await. */
@@ -55,12 +56,13 @@ public final class Rs2WalkerAwaits {
         long startWaitMs = System.currentTimeMillis() - startPhaseAt;
 
         // Which condition releases the traversal wait is the whole question for door latency: it
-        // already returns the moment the door EDGE resolves, so a wait that runs to its 2200ms cap
+        // already returns once the door EDGE is stably resolved, so a wait that runs to its 3500ms cap
         // means the edge is not being observed quickly (the live overlay needs a scene recapture
         // before it sees the door open) rather than the door being slow. Naming the winner turns
         // "doors feel slow" into a specific target — the same play that took the transport problem
         // from four rounds of guessing to a one-shot fix.
         final String[] releasedBy = {"timeout"};
+        final long[] edgeResolvedSinceMs = {0L};
         long traversalPhaseAt = System.currentTimeMillis();
         sleepUntil(() -> {
             if (Thread.currentThread().isInterrupted() || conversationOpened()) {
@@ -73,19 +75,29 @@ public final class Rs2WalkerAwaits {
             }
             boolean edgeResolved = isDoorEdgeResolved(fromWp, toWp);
             if (edgeResolved) {
-                releasedBy[0] = "edge-resolved";
-                return true;
+                long nowMs = System.currentTimeMillis();
+                if (edgeResolvedSinceMs[0] == 0L) {
+                    edgeResolvedSinceMs[0] = nowMs;
+                }
+                if (resolvedDoorReadyForFollowup(
+                        edgeResolved,
+                        Rs2Player.isMoving(),
+                        Rs2Player.isAnimating(),
+                        edgeResolvedSinceMs[0],
+                        nowMs,
+                        DOOR_OPEN_STABLE_BEFORE_CROSS_MS)) {
+                    releasedBy[0] = "edge-resolved-stable";
+                    return true;
+                }
+            } else {
+                edgeResolvedSinceMs[0] = 0L;
             }
-            if (Rs2WalkerProgress.isWithinChebyshev(now, toWp, 1)) {
+            if (hasReachedDoorFarSide(now, fromWp, toWp)) {
                 releasedBy[0] = "arrived-far-side";
                 return true;
             }
-            if (hasMeaningfulDoorProgress(ticket.beforePosition(), now, fromWp, toWp)) {
-                releasedBy[0] = "progress";
-                return true;
-            }
             long elapsedMs = System.currentTimeMillis() - ticket.startedAtMs();
-            boolean idleAccepted = shouldAcceptIdleDoorAwait(
+            boolean idleAccepted = !edgeResolved && shouldAcceptIdleDoorAwait(
                     Rs2Player.isMoving(),
                     Rs2Player.isAnimating(),
                     elapsedMs,
@@ -146,14 +158,10 @@ public final class Rs2WalkerAwaits {
         if (player == null || player.getPlane() != toWp.getPlane()) {
             return false;
         }
-        if (Rs2WalkerProgress.isWithinChebyshev(player, toWp, 1)) {
+        if (hasReachedDoorFarSide(player, fromWp, toWp)) {
             return true;
         }
         int toDist = player.distanceTo2D(toWp);
-        int fromDist = player.distanceTo2D(fromWp);
-        if (toDist + 1 < fromDist) {
-            return true;
-        }
         try {
             if (!Rs2Player.isMoving() && toDist <= 4 && Rs2Tile.isTileReachable(toWp)) {
                 return true;
@@ -169,20 +177,34 @@ public final class Rs2WalkerAwaits {
         return false;
     }
 
-    private static boolean hasMeaningfulDoorProgress(WorldPoint before, WorldPoint now, WorldPoint fromWp, WorldPoint toWp) {
-        if (before == null || now == null || toWp == null) {
+    /**
+     * Returns true only once the player is on the destination side of the directed door edge.
+     *
+     * <p>Using {@code distance(to) <= 1} is incorrect for adjacent edge endpoints: the near-side
+     * endpoint is itself one tile from {@code toWp}, so it releases the interaction await before
+     * the door has opened and lets the route loop click through the still-pending interaction.
+     * The strict Voronoi comparison below accepts the destination tile and tiles beyond it, while
+     * rejecting the near endpoint and side-adjacent/equidistant tiles.</p>
+     */
+    static boolean hasReachedDoorFarSide(WorldPoint player, WorldPoint fromWp, WorldPoint toWp) {
+        if (player == null || fromWp == null || toWp == null
+                || player.getPlane() != fromWp.getPlane()
+                || player.getPlane() != toWp.getPlane()) {
             return false;
         }
-        if (!now.equals(before) && Rs2WalkerProgress.isWithinChebyshev(now, toWp, 2)) {
-            return true;
-        }
-        if (fromWp == null || before.getPlane() != now.getPlane() || now.getPlane() != toWp.getPlane()) {
-            return false;
-        }
-        int beforeTo = before.distanceTo2D(toWp);
-        int nowTo = now.distanceTo2D(toWp);
-        int beforeFrom = before.distanceTo2D(fromWp);
-        int nowFrom = now.distanceTo2D(fromWp);
-        return nowTo < beforeTo && nowFrom >= beforeFrom;
+        return player.distanceTo2D(toWp) < player.distanceTo2D(fromWp);
+    }
+
+    static boolean resolvedDoorReadyForFollowup(boolean edgeResolved,
+                                                boolean moving,
+                                                boolean animating,
+                                                long resolvedSinceMs,
+                                                long nowMs,
+                                                long stableForMs) {
+        return edgeResolved
+                && !moving
+                && !animating
+                && resolvedSinceMs > 0L
+                && nowMs - resolvedSinceMs >= stableForMs;
     }
 }

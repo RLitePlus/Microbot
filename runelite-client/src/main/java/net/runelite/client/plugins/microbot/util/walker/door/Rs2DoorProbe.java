@@ -11,10 +11,12 @@ import net.runelite.api.ObjectComposition;
 import net.runelite.api.TileObject;
 import net.runelite.api.WallObject;
 import net.runelite.api.coords.WorldPoint;
+import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.util.gameobject.Rs2GameObject;
 import net.runelite.client.plugins.microbot.util.player.Rs2Player;
 import net.runelite.client.plugins.microbot.util.walker.Rs2PathApi;
 import net.runelite.client.plugins.microbot.util.walker.Rs2TransportEdge;
+import net.runelite.client.plugins.microbot.util.walker.Rs2TransportExecutor;
 import net.runelite.client.plugins.microbot.util.walker.Rs2TransportType;
 
 /**
@@ -75,6 +77,105 @@ public final class Rs2DoorProbe {
         return false;
     }
 
+    /**
+     * True when the scene object belongs to a catalog transport rather than the generic door
+     * cascade. In addition to the catalogued open object id, this recognises the closed precursor
+     * of a nearby climb-down transport (for example Manhole/Open -> Manhole/Climb-down).
+     *
+     * <p>The closed precursor cannot be identified by id alone because the catalog deliberately
+     * stores the usable/open object. Treating its {@code Open} action as a normal walk-through door
+     * makes the door handler release the route before the transport handler can perform the second
+     * interaction.</p>
+     */
+    public static boolean isTransportOwnedSceneObject(DoorProbeContext ctx, TileObject object) {
+        if (object == null) {
+            return false;
+        }
+        Map<TileObject, Boolean> cache = ctx == null ? null : ctx.objectEligibilityCache();
+        if (cache == null) {
+            return computeTransportOwnedSceneObject(ctx, object);
+        }
+        return cache.computeIfAbsent(object, o -> computeTransportOwnedSceneObject(ctx, o));
+    }
+
+    private static boolean computeTransportOwnedSceneObject(DoorProbeContext ctx, TileObject object) {
+        if (isCatalogTransportObject(object) && !Rs2DoorDetection.isDoorLikeSceneObject(object)) {
+            return true;
+        }
+        TransportSceneSnapshot snapshot = Microbot.getClientThread().runOnClientThreadOptional(() -> {
+            WorldPoint location = object.getWorldLocation();
+            ObjectComposition composition = resolveDoorComposition(ctx, object);
+            if (location == null || composition == null) {
+                return null;
+            }
+            return new TransportSceneSnapshot(
+                    location, composition.getName(), composition.getActions());
+        }).orElse(null);
+        if (snapshot == null) {
+            return false;
+        }
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                WorldPoint catalogOrigin = new WorldPoint(
+                        snapshot.location.getX() + dx,
+                        snapshot.location.getY() + dy,
+                        snapshot.location.getPlane());
+                for (Rs2TransportEdge transport : Rs2PathApi.getCatalogTransportEdges(catalogOrigin)) {
+                    if (isClosedPortalVariantForTransport(
+                            transport, snapshot.name, snapshot.actions)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    private static final class TransportSceneSnapshot {
+        private final WorldPoint location;
+        private final String name;
+        private final String[] actions;
+
+        private TransportSceneSnapshot(WorldPoint location, String name, String[] actions) {
+            this.location = location;
+            this.name = name;
+            this.actions = actions;
+        }
+    }
+
+    static boolean isClosedPortalVariantForTransport(Rs2TransportEdge transport,
+                                                       String objectName,
+                                                       String[] objectActions) {
+        if (transport == null
+                || transport.getType() != Rs2TransportType.TRANSPORT
+                || transport.getExecutor() != Rs2TransportExecutor.OBJECT
+                || !isClimbDownAction(transport.getAction())
+                || objectName == null
+                || objectActions == null) {
+            return false;
+        }
+        String normalizedName = objectName.toLowerCase();
+        boolean portalName = normalizedName.contains("trapdoor")
+                || normalizedName.contains("manhole")
+                || normalizedName.contains("grate")
+                || normalizedName.contains("hatch");
+        if (!portalName) {
+            return false;
+        }
+        for (String action : objectActions) {
+            if (action != null && "Open".equalsIgnoreCase(action)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isClimbDownAction(String action) {
+        return action != null
+                && ("Climb-down".equalsIgnoreCase(action)
+                || "Climb down".equalsIgnoreCase(action));
+    }
+
 	public static boolean isDoorLikeCatalogTransport(Rs2TransportEdge transport) {
 		if (transport == null || transport.getType() != Rs2TransportType.TRANSPORT) {
             return false;
@@ -108,7 +209,7 @@ public final class Rs2DoorProbe {
                 || (!(object instanceof WallObject) && !(object instanceof GameObject))) {
             return false;
         }
-        if (isNonDoorCatalogTransport(ctx, object)) {
+        if (isTransportOwnedSceneObject(ctx, object)) {
             return false;
         }
         // Snapshot location, not object.getWorldLocation(): this runs per candidate per segment.
@@ -128,15 +229,6 @@ public final class Rs2DoorProbe {
      * transport-map lookups and an uncached composition resolve each time. With no cache available the
      * behaviour is unchanged, just uncached.
      */
-    private static boolean isNonDoorCatalogTransport(DoorProbeContext ctx, TileObject object) {
-        Map<TileObject, Boolean> cache = ctx == null ? null : ctx.objectEligibilityCache();
-        if (cache == null) {
-            return isCatalogTransportObject(object) && !Rs2DoorDetection.isDoorLikeSceneObject(object);
-        }
-        return cache.computeIfAbsent(object,
-                o -> isCatalogTransportObject(o) && !Rs2DoorDetection.isDoorLikeSceneObject(o));
-    }
-
     /** Nearest walk-through door lying on the {@code fromWp -> toWp} segment, using scan snapshots when present. */
     public static TileObject findDoorNearSegment(DoorProbeContext ctx, Set<WorldPoint> blacklist,
                                                  Map<WorldPoint, Long> recentlyOpened, long stationaryDoorSuppressMs,

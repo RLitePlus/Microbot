@@ -69,6 +69,30 @@ public class Rs2DoorProbeTest {
     }
 
     @Test
+    public void closedManholeIsRecognizedAsTransportPrecursor() {
+        assertTrue(Rs2DoorProbe.isClosedPortalVariantForTransport(
+                transport(Rs2TransportType.TRANSPORT, "Manhole", "Manhole", "Climb-down"),
+                "Manhole",
+                new String[]{"Open", null, "Examine"}));
+    }
+
+    @Test
+    public void ordinaryOpenDoorIsNotTransportPrecursor() {
+        assertFalse(Rs2DoorProbe.isClosedPortalVariantForTransport(
+                transport(Rs2TransportType.TRANSPORT, "Manhole", "Manhole", "Climb-down"),
+                "Door",
+                new String[]{"Open", null, "Examine"}));
+    }
+
+    @Test
+    public void openManholeIsNotClosedTransportPrecursor() {
+        assertFalse(Rs2DoorProbe.isClosedPortalVariantForTransport(
+                transport(Rs2TransportType.TRANSPORT, "Manhole", "Manhole", "Climb-down"),
+                "Manhole",
+                new String[]{"Climb-down", null, "Examine"}));
+    }
+
+    @Test
     public void nonTransportTypeIsNeverDoorLike() {
         // Only TRANSPORT-type rows are considered; an agility shortcut named "Gate" must not qualify.
         assertFalse(Rs2DoorProbe.isDoorLikeCatalogTransport(

@@ -67,8 +67,11 @@ public class GameChatAppender extends AppenderBase<ILoggingEvent> {
         if (!Microbot.isLoggedIn()) return;
 
         final String formatted = layout.doLayout(event);
-        // use invoke so we don't stall the calling thread
-        Microbot.getClientThread().invoke(() ->
+        // AppenderBase holds its monitor while append runs. A synchronous client-thread invoke here
+        // deadlocks when the client thread logs at the same time: the background logger owns the
+        // appender monitor and waits for Client, while Client waits for the appender monitor.
+        // Chat mirroring is fire-and-forget, so enqueue it without waiting.
+        Microbot.getClientThread().invokeLater(() ->
                 Microbot.getClient().addChatMessage(ChatMessageType.ENGINE, "", formatted, "", false)
         );
     }
