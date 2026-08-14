@@ -969,6 +969,15 @@ public class ShortestPathPlugin extends Plugin implements KeyListener {
 		return defaultValue;
 	}
 
+	public static PlannerSelectionMode override(
+			String configOverrideKey, PlannerSelectionMode defaultValue) {
+		if (!configOverride.isEmpty()) {
+			return PlannerSelectionMode.fromConfigValue(
+					configOverride.get(configOverrideKey), defaultValue);
+		}
+		return defaultValue;
+	}
+
 	public static int override(String configOverrideKey, int defaultValue) {
 		if (!configOverride.isEmpty()) {
 			Object value = configOverride.get(configOverrideKey);

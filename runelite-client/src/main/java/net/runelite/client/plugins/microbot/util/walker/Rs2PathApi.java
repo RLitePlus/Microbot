@@ -102,6 +102,25 @@ public final class Rs2PathApi
 	// ------------------------------------------------------------------
 
 	/** @return the shared pathfinder configuration (transports, restrictions, toggles). */
+	/**
+	 * Invalidate the planner's transport refresh cache so the next plan re-evaluates transport
+	 * availability (league relics and similar unlocks change what is usable without any
+	 * inventory change).
+	 */
+	public static boolean invalidateTransportRefreshCache()
+	{
+		PathfinderConfig config = getPathfinderConfig();
+		if (config == null)
+		{
+			return false;
+		}
+		synchronized (getPathfinderMutex())
+		{
+			config.invalidateTransportRefreshCache();
+		}
+		return true;
+	}
+
 	public static PathfinderConfig getPathfinderConfig()
 	{
 		return ShortestPathPlugin.getPathfinderConfig();

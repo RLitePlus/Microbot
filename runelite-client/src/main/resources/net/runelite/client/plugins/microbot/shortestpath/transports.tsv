@@ -5892,8 +5892,8 @@
 
 # Elemental Workshop odd-looking wall. The steel key ring is not sufficient evidence that the
 # battered key is stored on it, so these rows deliberately accept only the concrete key item.
-2709 3495 0	2709 3496 0	Open;Odd-looking wall;26115		2887						2
-2709 3496 0	2709 3495 0	Open;Odd-looking wall;26115		2887						2
+2709 3495 0	2709 3496 0	Open;Odd-looking wall;26115		2887=1						2
+2709 3496 0	2709 3495 0	Open;Odd-looking wall;26115		2887=1						2
 
 2709 3498 0	2716 9888 0	Climb-down;Staircase;3415								1	
 2716 9888 0	2709 3497 0	Climb-up;Staircase;3416								1	
@@ -5996,12 +5996,12 @@
 3025 3511 1	3026 3511 1	Open;Sturdy door;2339									
 
 # Barrows mounds and individual crypt exits (surface destinations are representative mound anchors)
-3564 3291 0	3559 9703 3	Dig;Barrow;0		952					Y	3	Ahrim's Barrow
-3575 3299 0	3558 9718 3	Dig;Barrow;0		952					Y	3	Dharok's Barrow
-3578 3281 0	3534 9706 3	Dig;Barrow;0		952					Y	3	Guthan's Barrow
-3567 3274 0	3546 9686 3	Dig;Barrow;0		952					Y	3	Karil's Barrow
-3553 3281 0	3566 9683 3	Dig;Barrow;0		952					Y	3	Torag's Barrow
-3556 3297 0	3578 9704 3	Dig;Barrow;0		952					Y	3	Verac's Barrow
+3564 3291 0	3559 9703 3	Dig;Barrow;0		952=1					Y	3	Ahrim's Barrow
+3575 3299 0	3558 9718 3	Dig;Barrow;0		952=1					Y	3	Dharok's Barrow
+3578 3281 0	3534 9706 3	Dig;Barrow;0		952=1					Y	3	Guthan's Barrow
+3567 3274 0	3546 9686 3	Dig;Barrow;0		952=1					Y	3	Karil's Barrow
+3553 3281 0	3566 9683 3	Dig;Barrow;0		952=1					Y	3	Torag's Barrow
+3556 3297 0	3578 9704 3	Dig;Barrow;0		952=1					Y	3	Verac's Barrow
 3559 9703 3	3564 3291 0	Climb-up;Staircase;20667							Y	1	Ahrim's Barrow exit
 3558 9718 3	3575 3299 0	Climb-up;Staircase;20668							Y	1	Dharok's Barrow exit
 3534 9706 3	3578 3281 0	Climb-up;Staircase;20669							Y	1	Guthan's Barrow exit
