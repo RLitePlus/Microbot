@@ -1,6 +1,7 @@
 package net.runelite.client.plugins.microbot.shortestpath.pathfinder;
 
 import net.runelite.api.coords.WorldPoint;
+import net.runelite.client.plugins.microbot.shortestpath.ShortestPathConfig;
 import net.runelite.client.plugins.microbot.shortestpath.Transport;
 import net.runelite.client.plugins.microbot.shortestpath.TransportType;
 import org.junit.Test;
@@ -9,10 +10,17 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 public class TransportPlanningPolicyTest
 {
@@ -58,6 +66,39 @@ public class TransportPlanningPolicyTest
 		useTransport.setAccessible(true);
 
 		assertFalse((Boolean) useTransport.invoke(config, new Object[] {null}));
+	}
+
+	@Test
+	public void offlineRefreshDoesNotReadLiveConfig()
+	{
+		ShortestPathConfig liveConfig = mock(ShortestPathConfig.class);
+		PathfinderConfig config = new PathfinderConfig(
+			SplitFlagMap.fromResources(), new HashMap<>(), Collections.emptyList(), null, liveConfig);
+
+		config.refresh();
+
+		verifyNoInteractions(liveConfig);
+		assertNotNull(config.getMap());
+	}
+
+	@Test
+	@SuppressWarnings("unchecked")
+	public void constructorFiltersNullTransportElements() throws Exception
+	{
+		WorldPoint origin = new WorldPoint(3200, 3200, 0);
+		Transport valid = transport("Valid");
+		Set<Transport> inputSet = new HashSet<>();
+		inputSet.add(valid);
+		inputSet.add(null);
+		Map<WorldPoint, Set<Transport>> input = new HashMap<>();
+		input.put(origin, inputSet);
+		PathfinderConfig config = new PathfinderConfig(
+			SplitFlagMap.fromResources(), input, Collections.emptyList(), null, null);
+		Field field = PathfinderConfig.class.getDeclaredField("allTransports");
+		field.setAccessible(true);
+		Map<WorldPoint, Set<Transport>> stored = (Map<WorldPoint, Set<Transport>>) field.get(config);
+
+		assertEquals(Collections.singleton(valid), stored.get(origin));
 	}
 
 	private static Transport transport(String displayInfo)

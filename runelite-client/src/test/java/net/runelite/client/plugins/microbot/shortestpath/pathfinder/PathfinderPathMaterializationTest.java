@@ -10,9 +10,11 @@ import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.PriorityQueue;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -55,6 +57,49 @@ public class PathfinderPathMaterializationTest
 		assertEquals(5L, completed.getStats().getLiveCollisionEdgesChecked());
 	}
 
+	@Test(expected = IllegalArgumentException.class)
+	public void reachedMaterializedRouteRejectsEmptyPath()
+	{
+		WorldPoint start = new WorldPoint(3200, 3200, 0);
+		Pathfinder.completedRoute(
+			config(), start, Set.of(new WorldPoint(3201, 3200, 0)),
+			Collections.emptyList(), Collections.emptyList(),
+			PathTerminationReason.TARGET_REACHED, -1L, -1L, -1L, -1L, -1L);
+	}
+
+	@Test(expected = IllegalArgumentException.class)
+	public void reachedMaterializedRouteRejectsEndpointOutsideTargets()
+	{
+		WorldPoint start = new WorldPoint(3200, 3200, 0);
+		Pathfinder.completedRoute(
+			config(), start, Set.of(new WorldPoint(3201, 3200, 0)),
+			List.of(start, new WorldPoint(3202, 3200, 0)), Collections.emptyList(),
+			PathTerminationReason.TARGET_REACHED, -1L, -1L, -1L, -1L, -1L);
+	}
+
+	@Test
+	public void nonReachedMaterializedRouteMayBeEmpty()
+	{
+		WorldPoint start = new WorldPoint(3200, 3200, 0);
+		Pathfinder completed = Pathfinder.completedRoute(
+			config(), start, Set.of(new WorldPoint(3201, 3200, 0)),
+			Collections.emptyList(), Collections.emptyList(),
+			PathTerminationReason.SEARCH_EXHAUSTED, -1L, -1L, -1L, -1L, -1L);
+
+		assertTrue(completed.isDone());
+		assertTrue(completed.getPath().isEmpty());
+	}
+
+	@Test
+	public void transportFrontiersUseExplicitNodeComparator() throws Exception
+	{
+		Pathfinder pathfinder = new Pathfinder(
+			config(), new WorldPoint(3200, 3200, 0), new WorldPoint(3201, 3200, 0));
+
+		assertNotNull(priorityQueue(pathfinder, "pending").comparator());
+		assertNotNull(priorityQueue(pathfinder, "pendingBackward").comparator());
+	}
+
     @Test
     public void newerBestNodeRematerializesAfterAnEarlierLiveRead() throws Exception
     {
@@ -87,6 +132,19 @@ public class PathfinderPathMaterializationTest
         field.setAccessible(true);
         field.set(pathfinder, node);
     }
+
+	private static PathfinderConfig config()
+	{
+		return new PathfinderConfig(
+			SplitFlagMap.fromResources(), new HashMap<>(), Collections.emptyList(), null, null);
+	}
+
+	private static PriorityQueue<?> priorityQueue(Pathfinder pathfinder, String name) throws Exception
+	{
+		Field field = Pathfinder.class.getDeclaredField(name);
+		field.setAccessible(true);
+		return (PriorityQueue<?>) field.get(pathfinder);
+	}
 
     /**
      * Models the old dirty-flag implementation so this regression would fail before identity invalidation.

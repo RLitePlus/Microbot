@@ -69,9 +69,9 @@ public class Pathfinder implements Runnable {
     //      diverge tile-by-tile between successive searches with the same endpoints.
     //      Kills the deterministic "identical route every trip" fingerprint.
     private final Queue<Node> boundary = new PriorityQueue<>(4096, NODE_ORDER);
-    private final Queue<Node> pending = new PriorityQueue<>(256);
+    private final Queue<Node> pending = new PriorityQueue<>(256, NODE_ORDER);
     private final Queue<Node> boundaryBackward = new PriorityQueue<>(4096, NODE_ORDER);
-    private final Queue<Node> pendingBackward = new PriorityQueue<>(256);
+    private final Queue<Node> pendingBackward = new PriorityQueue<>(256, NODE_ORDER);
     private VisitedTiles visited;
 
     private volatile List<WorldPoint> path = Collections.emptyList();
@@ -148,6 +148,10 @@ public class Pathfinder implements Runnable {
         Objects.requireNonNull(terminationReason, "terminationReason");
         if (!path.isEmpty() && !start.equals(path.get(0))) {
             throw new IllegalArgumentException("materialized route must start at the requested start");
+        }
+        if (terminationReason == PathTerminationReason.TARGET_REACHED
+                && (path.isEmpty() || !targets.contains(path.get(path.size() - 1)))) {
+            throw new IllegalArgumentException("reached route must end at a requested target");
         }
         if (selectedPathCost < -1L || searchNanos < -1L || nodesChecked < -1L
                 || transportsChecked < -1L || liveCollisionEdgesChecked < -1L) {

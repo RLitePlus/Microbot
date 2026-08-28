@@ -265,6 +265,11 @@ public class PathfinderConfig {
         this(mapData, transports, restrictions, client, config, TransportPlanningPolicy.ALLOW_ALL);
     }
 
+    /**
+     * Creates pathfinder state. Null client/config dependencies are supported for offline planning
+     * and tests. A null client uses only static collision data, and refresh returns without reading
+     * live state when either dependency is absent.
+     */
     public PathfinderConfig(SplitFlagMap mapData, Map<WorldPoint, Set<Transport>> transports,
                             List<Restriction> restrictions,
                             Client client, ShortestPathConfig config,
@@ -346,6 +351,9 @@ public class PathfinderConfig {
     }
 
     public void refresh(WorldPoint target) {
+        if (client == null || config == null) {
+            return;
+        }
         calculationCutoffMillis = (long) config.calculationCutoff() * Constants.GAME_TICK_LENGTH;
         avoidWilderness = ShortestPathPlugin.override("avoidWilderness", config.avoidWilderness());
         avoidDangerousNpcs = ShortestPathPlugin.override("avoidDangerousNpcs", config.avoidDangerousNpcs());
@@ -694,6 +702,9 @@ public class PathfinderConfig {
             WorldPoint point = entry.getKey();
             Set<Transport> usableTransports = new HashSet<>(entry.getValue().size());
             for (Transport transport : entry.getValue()) {
+                if (transport == null) {
+                    continue;
+                }
                 totalTransports++;
                 updateActionBasedOnQuestState(transport);
 
@@ -1106,8 +1117,11 @@ public class PathfinderConfig {
         if (source == null || source.isEmpty()) {
             return;
         }
-        source.forEach((origin, set) ->
-                allTransports.put(origin, set == null ? Collections.emptySet() : new HashSet<>(set)));
+        source.forEach((origin, set) -> {
+            Set<Transport> valid = set == null ? new HashSet<>() : new HashSet<>(set);
+            valid.remove(null);
+            allTransports.put(origin, valid);
+        });
     }
 
     private void refreshRestrictionData() {
@@ -1356,7 +1370,7 @@ public class PathfinderConfig {
      * (Leagues catalog / Area teleports): quest action patch, {@link #useTransport}, {@link Rs2LeaguesTransport#isTransportAllowed}.
      */
     public boolean isTransportUsableWithLeaguesContext(Transport transport, Rs2LeaguesTransport.LeaguesContext leaguesCtx) {
-        if (transport == null || leaguesCtx == null) {
+        if (client == null || transport == null || leaguesCtx == null) {
             return false;
         }
         updateActionBasedOnQuestState(transport);
