@@ -4,6 +4,7 @@ import net.runelite.api.coords.WorldPoint;
 import net.runelite.client.plugins.microbot.shortestpath.pathfinder.Pathfinder;
 import net.runelite.client.plugins.microbot.shortestpath.pathfinder.PathfinderConfig;
 import net.runelite.client.plugins.microbot.shortestpath.pathfinder.SplitFlagMap;
+import net.runelite.client.plugins.microbot.util.walker.geometry.WalkerPathGeometry;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -13,16 +14,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 /**
  * Regression for the "walker deviates wide / traps itself near Varrock West Bank" bug.
  *
- * <p>The click layer had overshot onto {@code (3176,3428)} — a tile that is <em>not on the raw
- * route</em> — because route selection returned null on a stale anchor and the caller fell through
- * to clamping a far smoothed waypoint to a Euclidean radius. The game then pathed to that off-route
- * tile its own way, which is what produced the wide deviation and the backtracking.
+ * <p>The click layer had overshot onto {@code (3176,3428)} — a tile that was <em>not on the raw
+ * route in the captured incident</em> — because route selection returned null on a stale anchor and
+ * the caller fell through to clamping a far smoothed waypoint to a Euclidean radius. The game then
+ * pathed to that off-route tile its own way, producing the wide deviation and backtracking.
  *
  * <p>The invariant this pins is therefore <strong>"the click target is on the raw route"</strong>,
  * not "the click target is in line of sight". A minimap click is resolved by the game's own
@@ -37,9 +38,6 @@ public class RouteClickTargetRegressionTest {
 
     private static final WorldPoint START = new WorldPoint(3183, 3435, 0);
     private static final WorldPoint GOAL = new WorldPoint(3173, 3399, 0);
-    /** The historic bad click: ~10 tiles out, and crucially NOT on the raw route. */
-    private static final WorldPoint OLD_DEVIATING_CLICK = new WorldPoint(3176, 3428, 0);
-
     private static List<WorldPoint> sharedRawPath;
 
     @BeforeClass
@@ -110,11 +108,14 @@ public class RouteClickTargetRegressionTest {
     }
 
     @Test
-    public void theHistoricDeviatingClickIsNotOnTheRawRoute() {
-        assertFalse("raw path should not be empty", sharedRawPath.isEmpty());
-        assertFalse("(3176,3428) must not be on the raw route — selecting only on-route points is "
-                        + "what prevents the game improvising a detour",
-                sharedRawPath.contains(OLD_DEVIATING_CLICK));
+    public void primaryClickSelectionStaysOnComputedRawRoute() {
+        WorldPoint selected = WalkerPathGeometry.findFurthestRawPathPointMatching(
+                sharedRawPath, START, 10, 0, point -> true,
+                sharedRawPath.size(), () -> 0);
+
+        assertNotNull("the real route should offer a primary minimap target", selected);
+        assertTrue("primary click selection must return a tile on the current randomized raw route",
+                sharedRawPath.contains(selected));
     }
 
     /**
