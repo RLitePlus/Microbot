@@ -402,7 +402,8 @@ public class ShortestPathPlugin extends Plugin implements KeyListener {
             "minBankRouteSavings",
             "bankTripWhenCacheUnavailable",
             "preferTransportToTarget",
-            "maxSimilarTransportDistance"
+            "maxSimilarTransportDistance",
+            "plannerSelectionMode"
     );
     private static final String RELOAD_TRANSPORT_DEFINITIONS_KEY = "reloadTransportDefinitions";
     private static final String RESET_LEARNED_COLLISION_KEY = "resetLearnedCollision";

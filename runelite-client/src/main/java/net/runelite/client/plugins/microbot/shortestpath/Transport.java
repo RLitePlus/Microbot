@@ -338,10 +338,8 @@ public class Transport {
                 // no-op, because blocksWalkingEdgeWhenUnavailable would otherwise have routed AROUND
                 // an unusable shortcut; with the gate erased the planner actively prefers it.
                 if (!resolved) {
-                    log.warn("Transport skill requirement '{}' does not name a known skill (raw field '{}') "
-                                    + "— the requirement is being DROPPED, which makes this transport usable "
-                                    + "by any account. Check for spaces where the TSV needs a tab.",
-                            requirement.trim(), value.trim());
+                    throw new IllegalArgumentException("Unresolved transport skill requirement '"
+                            + requirement.trim() + "' in raw field '" + value.trim() + "'");
                 }
             }
         }

@@ -1253,7 +1253,7 @@ public class PathfinderConfig {
     private boolean useTransport(Transport transport) {
         // This runs once per expanded catalog edge during every refresh. Keep individual rejection
         // reasons at TRACE; DEBUG already receives the per-type aggregate emitted by refreshTransports.
-        if (!transportPlanningPolicy.isAdmitted(transport)) {
+        if (transport == null || !transportPlanningPolicy.isAdmitted(transport)) {
             log.trace("Transport ( O: {} D: {} type={} ) has no registered Microbot executor",
                     transport == null ? null : transport.getOrigin(),
                     transport == null ? null : transport.getDestination(),

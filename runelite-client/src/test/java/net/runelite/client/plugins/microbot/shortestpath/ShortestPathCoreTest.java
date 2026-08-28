@@ -403,6 +403,15 @@ public class ShortestPathCoreTest {
 		assertEquals(327, transport.getRequiredQuestPoints());
 	}
 
+	@Test(expected = IllegalArgumentException.class)
+	public void testTransportParserRejectsUnknownSkillRequirements() {
+		Map<String, String> fields = new HashMap<>();
+		fields.put("Destination", "1 2 0");
+		fields.put("Skills", "42 Imaginary");
+
+		new Transport(fields, TransportType.TELEPORTATION_ITEM);
+	}
+
 	@Test
 	public void testDirectMaxCapeAndQuestCapeImportPreservesRequirementsAndDestinations() {
 		Set<Transport> teleports = Transport.loadAllFromResources()

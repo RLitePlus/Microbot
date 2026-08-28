@@ -6,6 +6,7 @@ import net.runelite.client.plugins.microbot.shortestpath.TransportType;
 import org.junit.Test;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.HashMap;
 
@@ -46,6 +47,17 @@ public class TransportPlanningPolicyTest
 		assertTrue(installed.isAdmitted(admitted));
 		assertFalse(installed.isAdmitted(rejected));
 		assertTrue(installed.isZeroRuneSpell(home));
+	}
+
+	@Test
+	public void nullTransportIsRejectedBeforeFeatureChecks() throws Exception
+	{
+		PathfinderConfig config = new PathfinderConfig(
+			SplitFlagMap.fromResources(), new HashMap<>(), Collections.emptyList(), null, null);
+		Method useTransport = PathfinderConfig.class.getDeclaredMethod("useTransport", Transport.class);
+		useTransport.setAccessible(true);
+
+		assertFalse((Boolean) useTransport.invoke(config, new Object[] {null}));
 	}
 
 	private static Transport transport(String displayInfo)

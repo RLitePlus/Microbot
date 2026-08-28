@@ -7,6 +7,7 @@ import net.runelite.client.plugins.microbot.shortestpath.WorldPointUtil;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -15,6 +16,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
@@ -87,6 +89,40 @@ public class PathfinderTerminationReasonTest
 
 		assertEquals(PathTerminationReason.SEARCH_EXHAUSTED, pathfinder.getTerminationReason());
 		assertTrue(pathfinder.isDone());
+	}
+
+	@Test
+	public void bidirectionalSealedTargetPublishesReachedRimSubstitute()
+	{
+		Scenario scenario = scenario(10_000L);
+		SplitFlagMap.RegionExtent extents = SplitFlagMap.getRegionExtents();
+		byte[] planes = new byte[(extents.getWidth() + 1) * (extents.getHeight() + 1)];
+		Arrays.fill(planes, (byte) 4);
+		when(scenario.map.getPlanes()).thenReturn(planes);
+		WorldPoint sealedTarget = new WorldPoint(6000, 3200, 0);
+		WorldPoint rim = new WorldPoint(6001, 3200, 0);
+		int sealedTargetPacked = WorldPointUtil.packWorldPoint(sealedTarget);
+		int rimPacked = WorldPointUtil.packWorldPoint(rim);
+		when(scenario.map.canStep(anyInt(), anyInt(), anyInt(), anyInt(), anyInt()))
+			.thenAnswer(invocation -> invocation.getArgument(0, Integer.class) == rim.getX()
+				&& invocation.getArgument(1, Integer.class) == rim.getY());
+		when(scenario.map.getReverseNeighbors(any(Node.class), any(VisitedTiles.class),
+			eq(scenario.config), anySet(), anyMap())).thenAnswer(invocation ->
+		{
+			Node node = invocation.getArgument(0);
+			return node.packedPosition == rimPacked
+				? Collections.singletonList(new Node(START, node))
+				: Collections.emptyList();
+		});
+		Pathfinder pathfinder = new Pathfinder(
+			scenario.config, START, Collections.singleton(sealedTargetPacked));
+
+		pathfinder.run();
+
+		assertEquals(PathTerminationReason.SEARCH_EXHAUSTED, pathfinder.getTerminationReason());
+		assertEquals(rim, pathfinder.getNearestSealedRimSubstitute());
+		assertEquals(rim, pathfinder.getReachedSealedSubstitute());
+		assertEquals(rim, pathfinder.getPath().get(pathfinder.getPath().size() - 1));
 	}
 
 	@Test

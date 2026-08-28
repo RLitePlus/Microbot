@@ -912,7 +912,8 @@ public interface ShortestPathConfig extends Config {
 					+ "The F2P canary selects only semantically matching upstream routes and automatically "
 					+ "falls back to local; members routes remain local.",
 			position = 3,
-			section = sectionDeveloper
+			section = sectionDeveloper,
+			hidden = true
 	)
 	default PlannerSelectionMode plannerSelectionMode() {
 		return PlannerSelectionMode.LOCAL;

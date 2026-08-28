@@ -939,8 +939,16 @@ public class Pathfinder implements Runnable {
             // A genuinely REACHED rim is remembered before the remap, though — it is the walker's
             // signal to retarget the walk to the rim once instead of replaying this search forever.
             if (sealedTargetMode) {
-                if (terminationReason == PathTerminationReason.TARGET_REACHED && bestLastNode != null) {
-                    reachedSealedSubstitutePacked = bestLastNode.packedPosition;
+                int reachedPacked = -1;
+                if (terminationReason == PathTerminationReason.TARGET_REACHED) {
+                    if (bestLastNode != null) {
+                        reachedPacked = bestLastNode.packedPosition;
+                    } else if (joinedPath != null && !joinedPath.isEmpty()) {
+                        reachedPacked = WorldPointUtil.packWorldPoint(joinedPath.get(joinedPath.size() - 1));
+                    }
+                }
+                if (reachedPacked != -1) {
+                    reachedSealedSubstitutePacked = reachedPacked;
                     SealedVerdictMemo.clear(targetsPacked[0]);
                 } else if (terminationReason == PathTerminationReason.SEARCH_EXHAUSTED) {
                     // The frontier genuinely drained without touching the rim: proven unreachable,

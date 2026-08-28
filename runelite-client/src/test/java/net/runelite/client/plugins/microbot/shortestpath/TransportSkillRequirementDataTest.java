@@ -20,15 +20,13 @@ import static org.junit.Assert.assertTrue;
 /**
  * Every Skills entry in the shipped transport data must name a skill the parser can resolve.
  *
- * <p>An unresolvable requirement does not fail loudly — {@code Transport} matches the skill name
- * against {@link Skill#getName()} and simply never writes {@code skillLevels}, leaving it 0. Zero is
- * how "no requirement" is encoded, so a malformed requirement silently becomes NO requirement and the
- * transport turns usable by every account.
+ * <p>{@code Transport} rejects a row when a requirement cannot be resolved against
+ * {@link Skill#getName()} or the supported total/combat/quest-point aliases. This resource-wide test
+ * catches those malformed rows directly and keeps shipped data loadable.
  *
- * <p>That is not merely permissive. {@code PathfinderConfig.blocksWalkingEdgeWhenUnavailable} blocks
- * the walking edge a shortcut spans when the shortcut is unusable, so the planner routes around it —
- * with the gate erased the edge stays open and the planner actively PREFERS the shortcut as the
- * shortest route, sending the walker back repeatedly.
+ * <p>Failing closed matters because {@code PathfinderConfig.blocksWalkingEdgeWhenUnavailable} blocks
+ * the walking edge a shortcut spans when the shortcut is unusable. If a requirement were erased,
+ * that edge would stay open and the planner could repeatedly prefer an unusable shortcut.
  *
  * <p>Live case: the Draynor underwall tunnel rows carried {@code "42 Agility<spaces>7"}, a Duration
  * value separated by spaces instead of a tab. The field parsed as skill name {@code "Agility      7"},
@@ -135,8 +133,7 @@ public class TransportSkillRequirementDataTest {
         }
 
         assertFalse("precondition: the transport resources should be readable", filesChecked.isEmpty());
-        assertTrue("skill requirements that the parser will silently DROP, making these transports "
-                        + "usable by any account:\n  "
+        assertTrue("skill requirements that the parser cannot resolve:\n  "
                         + offenders.stream().collect(Collectors.joining("\n  ")),
                 offenders.isEmpty());
     }
