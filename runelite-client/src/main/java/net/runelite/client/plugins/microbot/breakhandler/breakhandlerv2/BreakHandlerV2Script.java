@@ -6,6 +6,7 @@ import net.runelite.api.GameState;
 import net.runelite.client.config.ConfigProfile;
 import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.Script;
+import net.runelite.client.plugins.microbot.breakhandler.BreakHandlerScript;
 import net.runelite.client.plugins.microbot.util.discord.Rs2Discord;
 import net.runelite.client.plugins.microbot.util.math.Rs2Random;
 import net.runelite.client.plugins.microbot.util.player.Rs2Player;
@@ -30,6 +31,7 @@ import java.util.concurrent.TimeUnit;
 @Singleton
 @Slf4j
 public class BreakHandlerV2Script extends Script {
+    private static final long LOCK_DEFERRAL_LOG_INTERVAL_MS = 30_000L;
 
     // Instance tracking for debugging
     private static int instanceCounter = 0;
@@ -72,6 +74,7 @@ public class BreakHandlerV2Script extends Script {
     // Break duration in milliseconds
     private long currentBreakDuration = 0;
     private boolean logoutBreakActive = false;
+    private long lastLockDeferralLogAt = 0L;
     private boolean longBreakDue = false;
     private boolean megaBreakDue = false;
     private volatile boolean currentBreakIsLong = false;
@@ -236,6 +239,16 @@ public class BreakHandlerV2Script extends Script {
      * Initiates break based on configuration
      */
     private void handleBreakRequested() {
+        if (shouldDeferRequestedBreak(breakEndTime)) {
+            long now = System.currentTimeMillis();
+            if (now - lastLockDeferralLogAt >= LOCK_DEFERRAL_LOG_INTERVAL_MS) {
+                log.info("[BreakHandlerV2] Break deferred while a plugin lock is active");
+                lastLockDeferralLogAt = now;
+            }
+            return;
+        }
+
+        lastLockDeferralLogAt = 0L;
         stopConfiguredPluginIfNeeded();
 
         // If breakEndTime is already set, we're in a no-logout break waiting for it to end
@@ -265,6 +278,14 @@ public class BreakHandlerV2Script extends Script {
             log.info("[BreakHandlerV2] Starting break (no logout - scripts paused)");
             beginPauseBreak();
         }
+    }
+
+    /**
+     * Defers only a new break request. A non-null end time represents an active
+     * no-logout break whose completion must continue to be processed.
+     */
+    static boolean shouldDeferRequestedBreak(Instant activeBreakEndTime) {
+        return activeBreakEndTime == null && BreakHandlerScript.isLockState();
     }
 
     /**
