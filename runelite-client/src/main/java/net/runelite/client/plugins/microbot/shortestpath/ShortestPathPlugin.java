@@ -402,7 +402,8 @@ public class ShortestPathPlugin extends Plugin implements KeyListener {
             "minBankRouteSavings",
             "bankTripWhenCacheUnavailable",
             "preferTransportToTarget",
-            "maxSimilarTransportDistance"
+            "maxSimilarTransportDistance",
+            "plannerSelectionMode"
     );
     private static final String RELOAD_TRANSPORT_DEFINITIONS_KEY = "reloadTransportDefinitions";
     private static final String RESET_LEARNED_COLLISION_KEY = "resetLearnedCollision";
@@ -965,6 +966,15 @@ public class ShortestPathPlugin extends Plugin implements KeyListener {
 			if (value instanceof Color) {
 				return (Color) value;
 			}
+		}
+		return defaultValue;
+	}
+
+	public static PlannerSelectionMode override(
+			String configOverrideKey, PlannerSelectionMode defaultValue) {
+		if (!configOverride.isEmpty()) {
+			return PlannerSelectionMode.fromConfigValue(
+					configOverride.get(configOverrideKey), defaultValue);
 		}
 		return defaultValue;
 	}

@@ -904,4 +904,18 @@ public interface ShortestPathConfig extends Config {
     default boolean resetLearnedCollision() {
         return false;
     }
+
+	@ConfigItem(
+			keyName = "plannerSelectionMode",
+			name = "Planner rollout mode",
+			description = "Local is the production default. Shadow compares the pinned upstream planner. "
+					+ "The F2P canary selects only semantically matching upstream routes and automatically "
+					+ "falls back to local; members routes remain local.",
+			position = 3,
+			section = sectionDeveloper,
+			hidden = true
+	)
+	default PlannerSelectionMode plannerSelectionMode() {
+		return PlannerSelectionMode.LOCAL;
+	}
 }
