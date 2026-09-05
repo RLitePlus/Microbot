@@ -589,6 +589,10 @@ public class Rs2GrandExchange {
      */
     private static boolean setQuantity(int quantity) {
         boolean success = retryQuantity(quantity, Rs2GrandExchange::getOfferQuantity, () -> {
+            if (!sleepUntil(() -> GrandExchangeWidget.getQuantityButton_X() != null, 2000)) {
+                log.warn("Quantity button not found");
+                return;
+            }
             Widget quantityButtonX = GrandExchangeWidget.getQuantityButton_X();
             if (quantityButtonX == null) {
                 log.warn("Quantity button not found");
